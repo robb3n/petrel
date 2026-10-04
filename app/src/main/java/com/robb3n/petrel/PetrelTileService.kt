@@ -2,6 +2,7 @@ package com.robb3n.petrel
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.graphics.drawable.Icon
 import android.net.VpnService
 import android.os.Build
 import android.service.quicksettings.Tile
@@ -74,6 +75,8 @@ class PetrelTileService : TileService() {
         val tile = qsTile ?: return
         val s = CoreBridge.state.value
         tile.label = getString(R.string.app_name)
+        // 显式设图标：只靠 manifest 的 android:icon 时，SystemUI（至少 ColorOS）覆盖安装后仍沿用缓存的旧图标
+        tile.icon = Icon.createWithResource(this, R.drawable.ic_tile)
         tile.state = if (s.active) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
         tile.subtitle = when {
             s.vpn == "starting" -> "连接中"

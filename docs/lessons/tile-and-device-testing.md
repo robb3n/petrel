@@ -60,6 +60,10 @@ tsnet 第一次启动时会打出登录链接（logcat 里的 `tailnet login URL
 锁屏下的坑：
 - 真机息屏加密码锁屏时 `cmd statusbar click-tile` 只会走到 `tile: launching TileLaunchActivity`，Activity 没起来，VPN 不会启动（`startActivityAndCollapse` 被锁屏挡住）。这是 `click-tile` 的模拟点击；真人在锁屏上点磁贴，系统会先要求解锁。直接 `startForegroundService` 的旧路径在锁屏下是否更宽松，没有对比测过。真机测试前先解锁并保持亮屏。
 
+## 磁贴图标要在代码里显式设置
+
+2026-10-05 换了 App 图标（`ic_tile.xml` 从桥形换成「合流」）之后，覆盖安装到一加 12 上，快捷面板里的 Petrel 磁贴仍然是旧的桥形。新包里的资源已经换了，通知小图标也用同一个资源。原因是磁贴图标只在 manifest 的 `android:icon` 里声明，`refresh()` 从不设 `tile.icon`，而 SystemUI 覆盖安装后继续用缓存的默认图标。修法：`refresh()` 里每次都设 `tile.icon = Icon.createWithResource(this, R.drawable.ic_tile)`。装上后展开面板，图标立刻换成新的，不用移除再重新添加磁贴。
+
 ## 磁贴文案要在面板展开期间订阅状态
 
 面板展开时磁贴一直处于监听状态，`TileService.requestListeningState` 不会再触发 `onStartListening`。原来只在 `onStartListening` 里刷新，结果在面板上点磁贴停止后，副标题还停在「待登录」，实际 VPN 已停。现在 `onStartListening` 起协程订阅 `CoreBridge.state`，`onStopListening` 取消。模拟器上验证：展开面板点停止，副标题立刻变「未连接」。
