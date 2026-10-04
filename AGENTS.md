@@ -102,9 +102,6 @@ Android 常驻代理 App：把 mihomo 内核和一个内置 tailnet 节点（tsn
 - **`versionName` 自动推出**：HEAD 上有 tag `v<baseVersionName>` 且已跟踪文件没有未提交改动 → `<baseVersionName>`（稳定版）；否则 `<baseVersionName>-dev.<build>`（如 `0.1.0-dev.12`，未跟踪文件不算改动）。
 - 升版本只改 `baseVersionName` 那一行，并在那个提交上打 tag `v<baseVersionName>`。
 
-## Local Deploy`。**仅本地，无对外发布**。
-- **Release**：opt-in `/release`，暂未定义。
-
 ## Local Deploy
 
 每次提交封存并 push 之后执行（本地、可逆；对外发布不在此）：
@@ -114,6 +111,24 @@ Android 常驻代理 App：把 mihomo 内核和一个内置 tailnet 节点（tsn
 3. 报出侧载存档路径、装上的 versionName 和 VPN 恢复结果。
 
 为什么用 debug 包：`scripts/push-config.sh`、`files/netevents.log` 都靠 `run-as`，只对 debuggable 包有效；界面轻，不需要 release 构建才流畅。
+
+## Release
+
+opt-in `/release`，只由人发起。发布的是回火任务的 stamp 打过 tag `v<baseVersionName>` 的提交；渠道是本仓库的 GitHub Releases，附 APK 与它的 sha256。
+
+1. 前置：HEAD 就是那个 tag，已跟踪文件干净，分支与 tag 都已推到 origin（脚本第 1 步会逐条核对）。
+2. 起草更新说明：取上一个 `v*` tag 以来的提交（首次发布取全部），以 `feat` / `fix` 为主，写成面向用户的中文，不写内部重构与构建细节，存成会话 scratchpad 里的临时文件。
+3. `scripts/publish-release.sh --dry-run --notes-file <文件>`：只构建与校验（版本是稳定版、正式签名指纹、只有 arm64-v8a、非 debuggable），不碰 GitHub。报出 APK 路径与 sha256。
+4. **人工确认闸门**：把 tag、版本、sha256 和更新说明交人确认；Release 是公开、不可逆的。
+5. `scripts/publish-release.sh --notes-file <文件>`：建 Release `v<版本>`、上传 `Petrel-<版本>.apk` 与 `.sha256`，再下载回来核对 sha256。同名 Release 已存在时拒绝，不覆盖。
+6. 报出 Release 网址。
+
+签名与构建的事实：
+
+- **release 包** = release 构建类型（非 debuggable，不开 R8）+ 正式 release key + 只含 arm64-v8a（`libgojni.so` 单个 ABI 约 60 MB）。debug 包仍是 arm64-v8a + x86_64、debug key。
+- **release key**：PKCS12，别名 `petrel`，RSA 4096，有效期 100 年。文件路径与口令只在构建机 `~/.gradle/gradle.properties` 的 `petrel.release.storeFile` / `storePassword` / `keyAlias` / `keyPassword`，**不进仓库、不打印到终端、日志或对话**；属性缺了，`assembleRelease` 直接失败并指出缺哪个，不会退回 debug key。工作副本与备份位置见 `AGENTS.local.md`。
+- **正式证书 SHA-256**：`94096a8fa7821aab4437210421bd4879304cffab8f3d52d98a7eef2506038a7d`（同步在 `scripts/publish-release.sh` 的 `OFFICIAL_CERT_SHA256`；`apksigner verify --print-certs` 核对）。**别换这把 key**：换了，已装用户无法覆盖升级。
+- release 包与 debug 包签名不同，不能互相覆盖安装：已装 debug 包的设备（如维护者的测试真机）要换成 release 包只能先卸载，tailnet 节点状态与配置会一起丢。
 
 ## 代码约定 / 经验
 

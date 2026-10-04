@@ -26,6 +26,10 @@ val trackedTreeClean: Boolean = providers.exec {
 val isStableBuild: Boolean = trackedTreeClean &&
     gitOutput("tag", "--points-at", "HEAD").lineSequence().any { it == "v$baseVersionName" }
 
+// 正式 release key（PKCS12）：路径与口令只在构建机 ~/.gradle/gradle.properties 的 petrel.release.*，不进仓库。
+val releaseSigningKeys = listOf("storeFile", "storePassword", "keyAlias", "keyPassword").map { "petrel.release.$it" }
+fun releaseSigningProp(key: String): String? = providers.gradleProperty("petrel.release.$key").orNull
+
 android {
     namespace = "com.robb3n.petrel"
     compileSdk = 35
@@ -36,14 +40,28 @@ android {
         targetSdk = 35
         versionCode = gitBuild
         versionName = if (isStableBuild) baseVersionName else "$baseVersionName-dev.$gitBuild"
-        // 与 core/build.sh 的 gomobile -target 对齐：arm64 真机 + x86_64 模拟器
-        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+    }
+
+    // 属性缺失时文件末尾的 taskGraph 检查让 release 构建直接失败，绝不退回 debug key。
+    signingConfigs {
+        create("release") {
+            releaseSigningProp("storeFile")?.let { storeFile = file(it) }
+            storePassword = releaseSigningProp("storePassword")
+            keyAlias = releaseSigningProp("keyAlias")
+            keyPassword = releaseSigningProp("keyPassword")
+        }
     }
 
     buildTypes {
+        debug {
+            // 与 core/build.sh 的 gomobile -target 对齐：arm64 真机 + x86_64 模拟器
+            ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        }
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
+            // 对外发布的包只给真机：libgojni.so 单个 ABI 约 60 MB，不带模拟器的 x86_64
+            ndk { abiFilters += listOf("arm64-v8a") }
         }
     }
     compileOptions {
@@ -77,6 +95,22 @@ val buildCore by tasks.registering(Exec::class) {
     commandLine("bash", "build.sh", coreAar.asFile.absolutePath)
 }
 tasks.named("preBuild") { dependsOn(buildCore) }
+
+// 会打包 / 签名 release 的任务进了任务图，而签名属性缺了 → 直接失败并指出缺哪个（同 Mu3ic）。
+// 只认 assemble / bundle / package / sign 开头、Release(Bundle) 结尾的任务；testReleaseUnitTest、lintRelease 不签名，照样能跑。
+val releasePackagingTask = Regex("^(assemble|bundle|package|sign)\\w*Release(Bundle)?$")
+gradle.taskGraph.whenReady {
+    val buildsRelease = allTasks.any { it.project == project && releasePackagingTask.matches(it.name) }
+    if (buildsRelease) {
+        val missing = releaseSigningKeys.filter { providers.gradleProperty(it).orNull.isNullOrBlank() }
+        if (missing.isNotEmpty()) {
+            throw GradleException(
+                "release 构建缺少签名属性：${missing.joinToString()}。" +
+                    "把它们写进 ~/.gradle/gradle.properties（见 AGENTS.md「## Release」），不会退回 debug key。"
+            )
+        }
+    }
+}
 
 dependencies {
     implementation(files(coreAar))
