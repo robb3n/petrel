@@ -3,10 +3,18 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
+    <!-- 「合流」：与启动器图标同一图形。 -->
+    <path
+        android:pathData="M4.26,17.8C8.81,17.8 9.39,12 13.94,12"
+        android:strokeWidth="2.26"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M4.26,6.2C8.81,6.2 9.39,12 13.94,12L17.8,12"
+        android:strokeWidth="2.26"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round" />
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M2,17h2.2a7.8,7.8 0,0 1,15.6 0H22v2H17.8v-2a5.8,5.8 0,0 0,-11.6 0v2H2z" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M2,9h20v2H2z" />
+        android:pathData="M17.64,12a2.1,2.1 0 1,0 4.19,0a2.1,2.1 0 1,0 -4.19,0" />
 </vector>

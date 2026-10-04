@@ -12,15 +12,15 @@
         <path
             android:pathData="M30,72C44.1,72 45.9,54 60,54"
             android:strokeWidth="7"
-            android:strokeColor="#FFD4B35B"
+            android:strokeColor="#FF000000"
             android:strokeLineCap="round" />
         <path
             android:pathData="M30,36C44.1,36 45.9,54 60,54L72,54"
             android:strokeWidth="7"
-            android:strokeColor="#FFFFF6E0"
+            android:strokeColor="#FF000000"
             android:strokeLineCap="round" />
         <path
-            android:fillColor="#FFFFF6E0"
+            android:fillColor="#FF000000"
             android:pathData="M71.5,54a6.5,6.5 0 1,0 13,0a6.5,6.5 0 1,0 -13,0" />
     </group>
 </vector>
