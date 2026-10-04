@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 窗口底色 = 默认皮肤 Shoal 的 wall token（浅）；MainActivity 在 setContent 之前再按实际皮肤与明暗覆盖一次 -->
+    <style name="Theme.Petrel" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#E9E1D3</item>
+    </style>
+
+    <!-- 磁贴入口用的无界面 Activity -->
+    <style name="Theme.Petrel.Translucent" parent="android:Theme.Translucent.NoTitleBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+</resources>

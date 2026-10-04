@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Shoal 连接</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500&amp;family=Rubik:wght@400;500;600;700&amp;family=Noto+Sans+SC:wght@400;500;700&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400..600,0..1,0&amp;display=block">
+<style>
+body{margin:0}
+.phone{--wall:#E9E1D3;--sf:#FEF6EE;--sf2:#F6ECDF;--sf3:#ECE0CF;--tx:#2A2217;--tx2:#8A7C65;--hair:#EADFCF;--em:#B1A48E;--ol:#705A0F;--onol:#FFF6E0;--gold:#D4B35B;--butter:#F6DE96;--butterInk:#2A1800;--brown:#665A42;--brownInk:#F2E6CF;--sage:#4E604E;--sageInk:#DCEADA;--mint:#CCEAC6;--mintInk:#1F3B22;--red:#B4181E;--redInk:#FFF1EC;--pink:#F4C9C4;--pinkInk:#6B0F12;--knob:#B7AA95;--heroA:#705A0F;--heroB:#8F7420;--heroC:#C9A64C;--s0:#705A0F;--s1:#B4181E;--s2:#8A6A12;--s3:#4E604E;--shIsle:0 16px 32px -18px rgba(70,48,18,.40),0 2px 6px rgba(70,48,18,.10),0 0 0 .5px rgba(70,48,18,.08);--shPill:0 2px 3px -1px rgba(70,48,18,.38),0 0 0 .5px rgba(70,48,18,.07);--ui:"Rubik","Noto Sans SC","PingFang SC",system-ui,sans-serif;--disp:"Oswald","Rubik","Noto Sans SC",sans-serif;--mono:"JetBrains Mono",ui-monospace,Menlo,monospace;width:390px;height:844px;position:relative;overflow:hidden;background:var(--wall);color:var(--tx);font-family:var(--ui);font-size:14px;line-height:1.35;-webkit-font-smoothing:antialiased}
+.phone[data-theme="dark"]{--wall:#14120E;--sf:#221E18;--sf2:#2B261E;--sf3:#383126;--tx:#EDE4D6;--tx2:#A3977F;--hair:#302A21;--em:#7C715F;--ol:#D4B35B;--onol:#2A1800;--gold:#D4B35B;--butter:#4A3E1E;--butterInk:#F6DE96;--brown:#6B5E45;--brownInk:#F2E6CF;--sage:#4E604E;--sageInk:#DCEADA;--mint:#2C4230;--mintInk:#CCEAC6;--red:#9E2A2E;--redInk:#FFF1EC;--pink:#4A2422;--pinkInk:#F4C9C4;--knob:#7C715F;--heroA:#3B300F;--heroB:#5E4E14;--heroC:#8F7420;--s0:#D4B35B;--s1:#E0787C;--s2:#C9B48A;--s3:#9DBB9D;--shIsle:0 16px 32px -18px rgba(0,0,0,.75),0 0 0 .5px rgba(255,240,210,.07);--shPill:0 2px 4px -1px rgba(0,0,0,.6),0 0 0 .5px rgba(255,240,210,.07)}
+.phone *{box-sizing:border-box}
+:where(.phone) a{color:inherit;text-decoration:none}
+:where(.phone) button{font:inherit;color:inherit;border:0;background:none;padding:0;margin:0;cursor:pointer;text-align:left}
+.ms{font-family:"Material Symbols Rounded";font-weight:normal;font-style:normal;font-size:20px;line-height:1;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;direction:ltr;-webkit-font-smoothing:antialiased;font-feature-settings:"liga";font-variation-settings:"FILL" 0,"wght" 500;user-select:none;flex:none}
+.ms.f{font-variation-settings:"FILL" 1,"wght" 500}
+.appbar{height:56px;display:flex;align-items:center;gap:8px;padding:0 8px 0 18px}
+.appbar h1{margin:0;font:600 20px/1.2 var(--ui);letter-spacing:.01em}
+.sp{flex:1}
+.ib{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:var(--tx2);flex:none}
+.ib .ms{font-size:22px}
+.scroll{position:absolute;left:0;right:0;top:56px;bottom:0;overflow-y:auto;scrollbar-width:none;padding:4px 12px 100px}
+.scroll::-webkit-scrollbar{display:none}
+.tag{font:500 10.5px/1 var(--ui);padding:4px 7px;border-radius:999px;background:var(--sf2);color:var(--tx2);flex:none;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.tag.live{background:var(--mint);color:var(--mintInk)}
+.tag.live::before{content:"";width:6px;height:6px;border-radius:50%;background:#4F9A5B}
+.tag.warn{background:var(--butter);color:var(--butterInk)}
+.lat{font:500 12px/1 var(--ui);font-variant-numeric:tabular-nums;padding:4px 8px;border-radius:999px;flex:none;white-space:nowrap}
+.lat.ok{background:var(--mint);color:var(--mintInk)}.lat.warn{background:var(--butter);color:var(--butterInk)}.lat.idle{background:var(--sf3);color:var(--tx2)}
+.foot{margin:10px 6px 0;font-size:11.5px;line-height:1.5;color:var(--tx2)}
+.mini{display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 10px 0 8px;border-radius:999px;background:var(--sf2);font:500 12px var(--ui);color:var(--tx);flex:none;white-space:nowrap}
+.mini .ms{font-size:16px}
+.mini.end{padding:0 6px 0 10px}
+.obtn{display:inline-flex;align-items:center;gap:4px;height:30px;padding:0 12px 0 9px;border-radius:999px;background:var(--ol);color:var(--onol);font:500 12.5px var(--ui);flex:none}
+.obtn .ms{font-size:18px}
+.sw{width:42px;height:24px;border-radius:999px;background:var(--sf3);position:relative;flex:none;transition:background .2s}
+.sw i{position:absolute;top:4px;left:4px;width:16px;height:16px;border-radius:50%;background:var(--knob);transition:transform .22s cubic-bezier(.3,.9,.3,1),background .2s}
+.sw.on{background:var(--ol)}
+.sw.on i{transform:translateX(18px);background:var(--onol)}
+.tile{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;flex:none}
+.tile .ms{font-size:20px}
+.t-ol{background:var(--ol);color:var(--onol)}.t-butter{background:var(--butter);color:var(--butterInk)}.t-mint{background:var(--mint);color:var(--mintInk)}
+.isle{background:var(--sf);border-radius:24px;padding:14px;box-shadow:var(--shIsle);margin-bottom:12px}
+.isle.tight{padding:6px}
+.ph{display:flex;align-items:center;gap:10px}
+.ph>div{flex:1;min-width:0}
+.ph h3{margin:0;font:600 15px/1.25 var(--ui)}
+.ph p{margin:2px 0 0;font-size:12px;color:var(--tx2);line-height:1.4}
+.card{background:var(--sf2);border-radius:16px;padding:6px}
+.list{display:flex;flex-direction:column;gap:2px}
+.row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:14px;width:100%}
+.row .g{flex:1;min-width:0}
+.row b{display:block;font-weight:500;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row small{display:block;color:var(--tx2);font-size:11.5px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .end{font-size:12.5px;color:var(--tx2);flex:none;display:flex;align-items:center;gap:1px;font-variant-numeric:tabular-nums}
+.row .end .ms{font-size:18px}
+.hero{border-radius:24px;padding:18px 16px 14px;margin-bottom:12px;color:#FFF6E0;background:linear-gradient(135deg,var(--heroA) 0%,var(--heroB) 55%,var(--heroC) 100%);box-shadow:var(--shIsle)}
+.htop{display:flex;align-items:flex-start;gap:12px}
+.htop>div{flex:1;min-width:0}
+.gret{font:600 22px/1.25 var(--ui)}
+.hero .sub{font-size:12px;opacity:.85;margin-top:4px}
+.hero .sw{margin-top:2px;background:rgba(255,246,224,.24)}
+.hero .sw i{background:rgba(255,246,224,.75)}
+.hero .sw.on{background:#FFF6E0}
+.hero .sw.on i{background:#705A0F}
+.hero .sw.busy i{animation:pulse .7s ease-in-out infinite alternate}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}
+.stat{background:var(--sf);border-radius:14px;padding:8px 10px 7px;color:var(--tx)}
+.stat .v{font:500 22px/1.1 var(--disp);letter-spacing:.01em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.stat .v small{font:500 12px var(--ui);color:var(--tx2);margin-left:3px;letter-spacing:0}
+.stat .k{font-size:10.5px;color:var(--tx2);margin-top:2px}
+.stat.s0 .v{color:var(--s0)}.stat.s2 .v{color:var(--s2)}.stat.s3 .v{color:var(--s3)}
+.hero .obtn{margin-top:12px;background:#FFF6E0;color:#705A0F}
+.hero.off{background:var(--sf);color:var(--tx)}
+.hero.off .sub{color:var(--tx2);opacity:1}
+.hero.off .sw{background:var(--sf3)}
+.hero.off .sw i{background:var(--knob)}
+.hero.off .stat{background:var(--sf2)}
+.chain{margin-top:12px;display:flex;flex-direction:column;gap:2px}
+.hop{position:relative;display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:14px}
+.hop>.ms{font-size:19px;color:var(--tx2)}
+.hop:not(:last-child)::after{content:"";position:absolute;left:18.5px;top:37px;bottom:-14px;width:2px;border-radius:1px;background:var(--sf3)}
+.hop .g{flex:1;min-width:0}
+.hop b{display:block;font-weight:500;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hop small{display:block;color:var(--tx2);font-size:11.5px;margin-top:1px}
+.hop.sel{background:var(--butter)}
+.hop.sel>.ms,.hop.sel b{color:var(--butterInk)}
+.fnav{position:absolute;left:12px;right:12px;bottom:16px;height:56px;background:var(--sf);border-radius:999px;box-shadow:var(--shIsle);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:5px;z-index:5}
+.fnav a{border-radius:999px;display:flex;align-items:center;justify-content:center;gap:6px;font:500 13px var(--ui);color:var(--tx2)}
+.fnav a .ms{font-size:21px}
+.fnav a.on{background:var(--ol);color:var(--onol)}
+.fnav a.on .ms{font-variation-settings:"FILL" 1,"wght" 500}
+@keyframes pulse{to{opacity:.35}}
+</style>
+</helmet>
+<div class="phone" data-theme="{{theme}}">
+  <header class="appbar">
+    <h1>Petrel</h1>
+    <span class="{{s.tagCls}}">{{s.tag}}</span>
+    <span class="sp"></span>
+    <button class="ib" type="button" aria-label="配置"><span class="ms">description</span></button>
+  </header>
+  <main class="scroll">
+    <section class="{{s.heroCls}}">
+      <div class="htop">
+        <div>
+          <div class="gret">{{s.label}}</div>
+          <div class="sub">{{s.sub}}</div>
+        </div>
+        <button class="{{s.swCls}}" type="button" aria-label="{{s.swLabel}}" onClick="{{toggle}}"><i></i></button>
+      </div>
+      <div class="stats">
+        <div class="stat s0"><div class="v">{{s.lat}}<small>{{s.latUnit}}</small></div><div class="k">出口延迟</div></div>
+        <div class="stat s3"><div class="v">{{s.peers}}</div><div class="k">tailnet 在线</div></div>
+        <div class="stat s2"><div class="v">{{s.nodes}}</div><div class="k">可选出口</div></div>
+      </div>
+      <sc-if value="{{s.login}}" hint-placeholder-val="{{ false }}">
+        <a class="obtn" href="ShoalTailnet.dc.html"><span class="ms">login</span>去登录 tailnet</a>
+      </sc-if>
+    </section>
+
+    <sc-if value="{{s.chain}}" hint-placeholder-val="{{ true }}">
+      <section class="isle">
+        <div class="ph">
+          <span class="tile t-ol"><span class="ms">alt_route</span></span>
+          <div><h3>当前链路</h3><p>PROXY · 手动选择 · 2 个节点</p></div>
+          <a class="mini end" href="ShoalNodes.dc.html">切换<span class="ms">chevron_right</span></a>
+        </div>
+        <div class="card chain">
+          <div class="hop"><span class="ms">lan</span><div class="g"><b>ts</b><small>tailnet 第一跳 · Petrel 注入</small></div></div>
+          <div class="hop"><span class="ms">swap_horiz</span><div class="g"><b>tc-u-se-ss-front</b><small>代理前置</small></div></div>
+          <div class="hop sel"><span class="ms f">radio_button_checked</span><div class="g"><b>us-lax-ntt-via-tcuse</b><small>出口 · PROXY 当前选中</small></div><span class="{{s.latCls}}">{{s.latText}}</span></div>
+        </div>
+      </section>
+    </sc-if>
+
+    <section class="isle tight">
+      <div class="list">
+        <a class="row" href="ShoalTailnet.dc.html">
+          <span class="tile t-mint"><span class="ms">lan</span></span>
+          <div class="g"><b>tailnet</b><small>{{s.tsub}}</small></div>
+          <span class="end">{{s.tend}}<span class="ms">chevron_right</span></span>
+        </a>
+        <button class="row" type="button">
+          <span class="tile t-butter"><span class="ms">description</span></span>
+          <div class="g"><b>配置</b><small>op12.local.yaml · 10月2日导入</small></div>
+          <span class="end"><span class="ms">chevron_right</span></span>
+        </button>
+      </div>
+    </section>
+    <p class="foot">状态栏快捷开关一按即起，App 被强制停止后也能拉起。</p>
+  </main>
+  <nav class="fnav" aria-label="主导航">
+    <a class="on" href="Main.dc.html"><span class="ms">power_settings_new</span>连接</a>
+    <a href="ShoalNodes.dc.html"><span class="ms">hub</span>节点</a>
+    <a href="ShoalTailnet.dc.html"><span class="ms">lan</span>tailnet</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"state":{"editor":"enum","options":["已连接","连接中","待登录","未连接"],"default":"已连接"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  componentDidUpdate(prev) {
+    if (prev.state !== this.props.state && this.state && this.state.st) this.setState({ st: null });
+  }
+  componentWillUnmount() { clearTimeout(this._t); }
+  renderVals() {
+    const M = {
+      '已连接': { label: '已连接', sub: '代理与 tailnet 都已就绪', tag: '已连接', tagCls: 'tag live', heroCls: 'hero', swCls: 'sw on', swLabel: '断开 VPN', lat: '182', latUnit: 'ms', peers: '5/6', nodes: '2', chain: true, latText: '182 ms', latCls: 'lat warn', login: false, tsub: 'op12-petrel · 100.64.0.20', tend: '5 / 6 在线' },
+      '连接中': { label: '连接中', sub: '正在启动 tailnet 与代理', tag: '连接中', tagCls: 'tag', heroCls: 'hero', swCls: 'sw on busy', swLabel: '断开 VPN', lat: '—', latUnit: '', peers: '—', nodes: '—', chain: false, latText: '—', latCls: 'lat idle', login: false, tsub: '正在启动', tend: '' },
+      '待登录': { label: '待登录', sub: '登录 tailnet 之后代理才能用', tag: '待登录', tagCls: 'tag warn', heroCls: 'hero', swCls: 'sw on', swLabel: '断开 VPN', lat: '—', latUnit: '', peers: '—', nodes: '2', chain: true, latText: '—', latCls: 'lat idle', login: true, tsub: 'op12-petrel · 等待批准', tend: '待登录' },
+      '未连接': { label: '未连接', sub: '点右边的开关，或用状态栏快捷开关', tag: '未连接', tagCls: 'tag', heroCls: 'hero off', swCls: 'sw', swLabel: '连接 VPN', lat: '—', latUnit: '', peers: '—', nodes: '—', chain: false, latText: '—', latCls: 'lat idle', login: false, tsub: '未启动', tend: '' }
+    };
+    const cur = (this.state && this.state.st) || this.props.state || '已连接';
+    const s = M[cur] || M['已连接'];
+    const toggle = () => {
+      clearTimeout(this._t);
+      if (cur === '未连接') {
+        this.setState({ st: '连接中' });
+        this._t = setTimeout(() => this.setState({ st: '已连接' }), 1400);
+      } else {
+        this.setState({ st: '未连接' });
+      }
+    };
+    return { theme: this.props.dark ? 'dark' : 'light', s, toggle };
+  }
+}
+</script>
+</body>
+</html>

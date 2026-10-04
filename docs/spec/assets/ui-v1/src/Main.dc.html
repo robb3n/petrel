@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>连接 · 已连接</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+a:hover{color:inherit}
+.pt{--bg:#F2F5F6;--surface:#FFFFFF;--surface-2:#E7ECEE;--ink:#11181C;--ink-2:#4A5761;--line:#D2DADE;--accent:#0C6A76;--on-accent:#FFFFFF;--accent-soft:#D3EBEE;--ok:#1B7346;--warn:#985200;--warn-soft:#F8E8D2;--err:#B3261E;--err-soft:#FBE2DF}
+.pt.dark{--bg:#0C1114;--surface:#141B1F;--surface-2:#1D262B;--ink:#E4EAED;--ink-2:#9AA8B0;--line:#28333A;--accent:#61C3CF;--on-accent:#05181B;--accent-soft:#11343A;--ok:#5ECA8F;--warn:#E6A64B;--warn-soft:#33261A;--err:#F28B82;--err-soft:#3A1C1A}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.ic{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+</style>
+</helmet>
+<div class="{{theme}}" style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: var(--bg); color: var(--ink); font-family: 'Noto Sans SC', sans-serif; overflow: hidden">
+<header style="display: flex; align-items: center; padding: 22px 20px 10px">
+<h1 style="margin: 0; font-size: 22px; font-weight: 700">Petrel</h1>
+</header>
+<main style="flex-grow: 1; display: flex; flex-direction: column; gap: 14px; padding: 6px 16px 16px">
+<section aria-label="连接状态" style="background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="width: 12px; height: 12px; border-radius: 6px; background: var(--ok)"></span>
+<span style="font-size: 30px; font-weight: 700; line-height: 1.15">已连接</span>
+</div>
+<p style="margin: 0; font-size: 14px; color: var(--ink-2)">代理与 tailnet 都已就绪</p>
+</div>
+<a href="Nodes.dc.html" aria-label="当前链路，点按切换节点" style="display: flex; flex-direction: column; background: var(--surface-2); border-radius: 16px; padding: 14px 16px">
+<span style="font-size: 12px; color: var(--ink-2); margin-bottom: 10px">当前链路</span>
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="width: 10px; height: 10px; border-radius: 5px; border: 2px solid var(--accent); box-sizing: border-box; flex-shrink: 0"></span>
+<span class="mono" style="font-size: 14px; flex-grow: 1">ts</span>
+<span style="font-size: 12px; color: var(--ink-2)">tailnet 第一跳</span>
+</div>
+<div style="width: 2px; height: 14px; background: var(--line); margin-left: 4px"></div>
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="width: 10px; height: 10px; border-radius: 5px; border: 2px solid var(--accent); box-sizing: border-box; flex-shrink: 0"></span>
+<span class="mono" style="font-size: 14px; flex-grow: 1">tc-u-se-ss-front</span>
+<span style="font-size: 12px; color: var(--ink-2)">代理前置</span>
+</div>
+<div style="width: 2px; height: 14px; background: var(--line); margin-left: 4px"></div>
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="width: 10px; height: 10px; border-radius: 5px; background: var(--accent); flex-shrink: 0"></span>
+<span class="mono" style="font-size: 14px; font-weight: 500; flex-grow: 1">us-lax-ntt-via-tcuse</span>
+<span class="mono" style="font-size: 13px; color: var(--ok)">182 ms</span>
+<svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>
+</div>
+</a>
+<button type="button" style="height: 48px; border-radius: 24px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-family: 'Noto Sans SC', sans-serif; font-size: 16px; font-weight: 500; cursor: pointer">断开</button>
+</section>
+<section aria-label="概况" style="background: var(--surface); border: 1px solid var(--line); border-radius: 24px; display: flex; flex-direction: column">
+<a href="Tailnet.dc.html" style="display: flex; align-items: center; gap: 14px; min-height: 68px; padding: 12px 16px; box-sizing: border-box">
+<span style="width: 40px; height: 40px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; justify-content: center; flex-shrink: 0"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2.2"></circle><circle cx="5" cy="18" r="2.2"></circle><circle cx="19" cy="18" r="2.2"></circle><path d="M11 7 6 16M13 7l5 9M7.2 18h9.6"></path></svg></span>
+<span style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0">
+<span style="font-size: 15px; font-weight: 500">tailnet</span>
+<span class="mono" style="font-size: 12.5px; color: var(--ink-2)">100.64.0.20</span>
+</span>
+<span style="font-size: 13px; color: var(--ok); white-space: nowrap; flex-shrink: 0">已连接</span>
+<svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="color: var(--ink-2)"><path d="m9 6 6 6-6 6"></path></svg>
+</a>
+<div style="height: 1px; background: var(--line); margin: 0 16px"></div>
+<a href="Config.dc.html" style="display: flex; align-items: center; gap: 14px; min-height: 68px; padding: 12px 16px; box-sizing: border-box">
+<span style="width: 40px; height: 40px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; justify-content: center; flex-shrink: 0"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg></span>
+<span style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0">
+<span style="font-size: 15px; font-weight: 500">配置</span>
+<span class="mono" style="font-size: 12.5px; color: var(--ink-2)">op12.local.yaml</span>
+</span>
+<span style="font-size: 13px; color: var(--ink-2); white-space: nowrap; flex-shrink: 0">10月2日导入</span>
+<svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="color: var(--ink-2)"><path d="m9 6 6 6-6 6"></path></svg>
+</a>
+</section>
+<p style="margin: 4px 8px 0; font-size: 12.5px; line-height: 1.6; color: var(--ink-2)">状态栏快捷开关可直接开关，App 被强制停止后也能拉起。</p>
+</main>
+<nav aria-label="主导航" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 10px 8px 26px; background: var(--surface); border-top: 1px solid var(--line)">
+<a href="Main.dc.html" aria-current="page" style="display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 56px; color: var(--ink)">
+<span style="width: 64px; height: 32px; border-radius: 16px; background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; justify-content: center"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v8"></path><path d="M6.3 6.3a8 8 0 1 0 11.4 0"></path></svg></span>
+<span style="font-size: 12px; font-weight: 700">连接</span>
+</a>
+<a href="Nodes.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 56px; color: var(--ink-2)">
+<span style="width: 64px; height: 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="6" r="1.8"></circle><circle cx="5.5" cy="12" r="1.8"></circle><circle cx="5.5" cy="18" r="1.8"></circle><path d="M10 6h10M10 12h10M10 18h10"></path></svg></span>
+<span style="font-size: 12px; font-weight: 500">节点</span>
+</a>
+<a href="Tailnet.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 56px; color: var(--ink-2)">
+<span style="width: 64px; height: 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2.2"></circle><circle cx="5" cy="18" r="2.2"></circle><circle cx="19" cy="18" r="2.2"></circle><path d="M11 7 6 16M13 7l5 9M7.2 18h9.6"></path></svg></span>
+<span style="font-size: 12px; font-weight: 500">tailnet</span>
+</a>
+</nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false,"section":"主题"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return { theme: this.props.dark ? 'pt dark' : 'pt' };
+}
+}
+</script>
+</body>
+</html>

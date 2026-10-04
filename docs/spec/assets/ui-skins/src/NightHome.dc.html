@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>夜航 连接</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+.phone{--bg:#0A0F17;--p1:#0F1722;--p2:#162130;--line:#213045;--ink:#E6EDF5;--ink2:#97A6BA;--ink3:#72839A;--ok:#4ADE9A;--okBg:rgba(74,222,154,.12);--warn:#F4B34C;--warnBg:rgba(244,179,76,.13);--err:#FF7B6E;--glow:rgba(74,222,154,.10);--ui:"IBM Plex Sans","Noto Sans SC",system-ui,sans-serif;--disp:"Barlow Condensed","IBM Plex Sans","Noto Sans SC",sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;width:390px;height:844px;position:relative;overflow:hidden;background:var(--bg);color:var(--ink);font-family:var(--ui);font-size:14px;line-height:1.4;-webkit-font-smoothing:antialiased}
+.phone[data-theme="light"]{--bg:#E8EDF2;--p1:#FFFFFF;--p2:#EEF2F7;--line:#D3DCE6;--ink:#0B1524;--ink2:#46566C;--ink3:#66768C;--ok:#0B7A49;--okBg:rgba(11,122,73,.10);--warn:#985600;--warnBg:rgba(152,86,0,.10);--err:#B42E22;--glow:rgba(11,122,73,.07)}
+.phone *{box-sizing:border-box}
+:where(.phone) a{color:inherit;text-decoration:none}
+:where(.phone) button{font:inherit;color:inherit;border:0;background:none;padding:0;margin:0;cursor:pointer;text-align:left}
+.ic{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.top{height:60px;display:flex;align-items:center;gap:8px;padding:0 6px 0 20px}
+.brand{font:600 20px/1 var(--disp);letter-spacing:.2em}
+.sp{flex:1}
+.chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 9px;border:1px solid var(--line);border-radius:6px;font:500 11px/1 var(--mono);color:var(--ink2);white-space:nowrap}
+.icb{width:44px;height:44px;border-radius:10px;display:grid;place-items:center;color:var(--ink2)}
+.icb .ic{width:20px;height:20px}
+.scroll{position:absolute;left:0;right:0;top:60px;bottom:64px;overflow-y:auto;scrollbar-width:none;padding:2px 12px 20px}
+.scroll::-webkit-scrollbar{display:none}
+.panel{background:var(--p1);border:1px solid var(--line);border-radius:14px;margin-bottom:12px;overflow:hidden}
+.cap{display:flex;align-items:center;gap:6px;font:500 11px/1 var(--ui);letter-spacing:.06em;color:var(--ink3)}
+.cap .en{font:500 9.5px/1 var(--mono);letter-spacing:.16em}
+.foot{margin:4px 6px 0;font-size:11.5px;line-height:1.5;color:var(--ink3)}
+.status{padding:16px 16px 4px}
+.srow{display:flex;align-items:center;gap:12px;padding-bottom:12px}
+.sl{flex:1;min-width:0}
+.big{display:flex;align-items:center;gap:12px;margin-top:12px;font:600 30px/1.1 var(--ui)}
+.led{width:10px;height:10px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px var(--okBg);flex:none}
+.sub{margin-top:6px;font-size:13px;color:var(--ink2)}
+.pwr{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;border:1.5px solid var(--ok);color:var(--ok);background:var(--okBg);box-shadow:0 0 0 7px var(--glow);flex:none;margin-right:4px}
+.pwr .ic{width:26px;height:26px;stroke-width:2}
+.status.busy .led{background:var(--ink2);box-shadow:none;animation:blink .7s ease-in-out infinite alternate}
+.status.warn .led{background:var(--warn);box-shadow:0 0 0 4px var(--warnBg)}
+.status.off .led{background:transparent;border:1.5px solid var(--ink3);box-shadow:none}
+.status.off .pwr{border-color:var(--line);color:var(--ink2);background:transparent;box-shadow:none}
+.wbtn{display:inline-flex;align-items:center;gap:6px;height:36px;margin:0 0 14px;padding:0 12px;border-radius:8px;background:var(--warnBg);color:var(--warn);font:500 13px var(--ui)}
+.wbtn .ic{width:15px;height:15px}
+.rule{height:1px;background:var(--line);margin:4px -16px 14px}
+.rhead{display:flex;align-items:flex-end;gap:8px}
+.readout{font:500 36px/.85 var(--disp);color:var(--ok);font-variant-numeric:tabular-nums}
+.readout small{font:500 11px var(--mono);color:var(--ink2);margin-left:4px}
+.status.warn .readout{color:var(--ink3)}
+.route{position:relative;height:44px;margin:18px 16px 6px}
+.track{position:absolute;left:0;right:0;top:7px;height:2px;background:repeating-linear-gradient(90deg,var(--ok) 0 8px,transparent 8px 14px);background-size:14px 2px;animation:flow .9s linear infinite}
+.status.warn .track{background:repeating-linear-gradient(90deg,var(--line) 0 4px,transparent 4px 8px);background-size:8px 2px;animation:none}
+.stop{position:absolute;top:0;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:9px}
+.stop i{width:16px;height:16px;border-radius:50%;background:var(--p1);border:2px solid var(--ok)}
+.stop.end i{background:var(--ok);box-shadow:0 0 0 5px var(--okBg)}
+.stop span{font:500 11px/1 var(--ui);color:var(--ink2);white-space:nowrap}
+.status.warn .stop i{border-color:var(--ink3)}
+.status.warn .stop.end i{background:var(--p1);box-shadow:none}
+.status.warn .stop.t i{border-color:var(--warn);background:var(--warnBg)}
+.hops{list-style:none;margin:8px -16px 0;padding:0}
+.hops li{display:flex;align-items:baseline;gap:12px;padding:11px 16px;border-top:1px solid var(--line)}
+.hops .n{font:500 10.5px var(--mono);color:var(--ink3);flex:none}
+.hops b{flex:1;min-width:0;font:500 13.5px var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hops em{font-style:normal;font-size:12px;color:var(--ink2);flex:none}
+.hops li.x b{font-weight:600}
+.status.live .hops li.x em{color:var(--ok)}
+.lrow{display:flex;align-items:center;gap:12px;width:100%;padding:14px 12px 14px 16px;border-top:1px solid var(--line)}
+.lrow:first-child{border-top:0}
+.lrow>.ic{width:20px;height:20px;color:var(--ink2)}
+.lrow .g{flex:1;min-width:0}
+.lrow b{display:block;font:500 14px/1.3 var(--ui)}
+.lrow small{display:block;margin-top:3px;font:400 11.5px/1.3 var(--mono);color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.val{font:500 11.5px var(--mono);color:var(--ink2);white-space:nowrap}
+.val.ok{color:var(--ok)}.val.warn{color:var(--warn)}
+.lrow .chev{width:16px;height:16px;color:var(--ink3)}
+.dock{position:absolute;left:0;right:0;bottom:0;height:64px;background:var(--p1);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.dock a{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;font:500 11px/1 var(--ui);color:var(--ink3)}
+.dock a .ic{width:22px;height:22px}
+.dock a.on{color:var(--ink)}
+.dock a.on::before{content:"";position:absolute;top:-1px;left:50%;width:32px;height:2px;margin-left:-16px;background:var(--ok);border-radius:0 0 2px 2px}
+@keyframes flow{to{background-position:14px 0}}
+@keyframes blink{to{opacity:.3}}
+</style>
+</helmet>
+<div class="phone" data-theme="{{theme}}">
+  <header class="top">
+    <span class="brand">PETREL</span>
+    <span class="sp"></span>
+    <span class="chip">TUN · gvisor</span>
+    <button class="icb" type="button" aria-label="配置"><svg class="ic" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg></button>
+  </header>
+  <main class="scroll">
+    <section class="{{s.cls}}">
+      <div class="srow">
+        <div class="sl">
+          <div class="cap">状态 <span class="en">STATUS</span></div>
+          <div class="big"><span class="led"></span>{{s.label}}</div>
+          <div class="sub">{{s.sub}}</div>
+        </div>
+        <button class="pwr" type="button" aria-label="{{s.pwrLabel}}" onClick="{{toggle}}"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3v8"></path><path d="M6.3 6.3a8 8 0 1 0 11.4 0"></path></svg></button>
+      </div>
+      <sc-if value="{{s.login}}" hint-placeholder-val="{{ false }}">
+        <a class="wbtn" href="NightTailnet.dc.html">去登录 tailnet<svg class="ic" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"></path></svg></a>
+      </sc-if>
+      <sc-if value="{{s.chain}}" hint-placeholder-val="{{ true }}">
+        <div class="rule"></div>
+        <div class="rhead">
+          <div class="cap">当前链路 <span class="en">ROUTE</span></div>
+          <span class="sp"></span>
+          <span class="readout">{{s.lat}}<small>{{s.unit}}</small></span>
+        </div>
+        <div class="route">
+          <div class="track"></div>
+          <div class="stop" style="left: 0%"><i></i><span>本机</span></div>
+          <div class="stop t" style="left: 33.333%"><i></i><span>tailnet</span></div>
+          <div class="stop" style="left: 66.667%"><i></i><span>前置</span></div>
+          <div class="stop end" style="left: 100%"><i></i><span>出口</span></div>
+        </div>
+        <ol class="hops">
+          <li><span class="n">01</span><b>ts</b><em>tailnet 第一跳</em></li>
+          <li><span class="n">02</span><b>tc-u-se-ss-front</b><em>代理前置</em></li>
+          <li class="x"><span class="n">03</span><b>us-lax-ntt-via-tcuse</b><em>出口 · PROXY</em></li>
+        </ol>
+      </sc-if>
+    </section>
+
+    <section class="panel">
+      <a class="lrow" href="NightTailnet.dc.html">
+        <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.2"></circle><circle cx="5" cy="18" r="2.2"></circle><circle cx="19" cy="18" r="2.2"></circle><path d="M11 7 6 16M13 7l5 9M7.2 18h9.6"></path></svg>
+        <div class="g"><b>tailnet</b><small>{{s.tsub}}</small></div>
+        <span class="{{s.tcls}}">{{s.tval}}</span>
+        <svg class="ic chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"></path></svg>
+      </a>
+      <button class="lrow" type="button">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg>
+        <div class="g"><b>配置</b><small>op12.local.yaml</small></div>
+        <span class="val">10-02 导入</span>
+        <svg class="ic chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"></path></svg>
+      </button>
+    </section>
+    <p class="foot">状态栏快捷开关一按即起，App 被强制停止后也能拉起。</p>
+  </main>
+  <nav class="dock" aria-label="主导航">
+    <a class="on" href="NightHome.dc.html"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3v8"></path><path d="M6.3 6.3a8 8 0 1 0 11.4 0"></path></svg>连接</a>
+    <a href="NightNodes.dc.html"><svg class="ic" viewBox="0 0 24 24"><circle cx="5.5" cy="6" r="1.8"></circle><circle cx="5.5" cy="12" r="1.8"></circle><circle cx="5.5" cy="18" r="1.8"></circle><path d="M10 6h10M10 12h10M10 18h10"></path></svg>节点</a>
+    <a href="NightTailnet.dc.html"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.2"></circle><circle cx="5" cy="18" r="2.2"></circle><circle cx="19" cy="18" r="2.2"></circle><path d="M11 7 6 16M13 7l5 9M7.2 18h9.6"></path></svg>tailnet</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":true},"state":{"editor":"enum","options":["已连接","连接中","待登录","未连接"],"default":"已连接"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  componentDidUpdate(prev) {
+    if (prev.state !== this.props.state && this.state && this.state.st) this.setState({ st: null });
+  }
+  componentWillUnmount() { clearTimeout(this._t); }
+  renderVals() {
+    const M = {
+      '已连接': { cls: 'panel status live', label: '已连接', sub: '代理与 tailnet 都已就绪', pwrLabel: '断开 VPN', login: false, chain: true, lat: '182', unit: 'ms', tsub: 'op12-petrel · 100.64.0.20', tval: '5/6 在线', tcls: 'val ok' },
+      '连接中': { cls: 'panel status busy', label: '连接中', sub: '正在启动 tailnet 与代理', pwrLabel: '断开 VPN', login: false, chain: false, lat: '—', unit: '', tsub: '正在启动', tval: '—', tcls: 'val' },
+      '待登录': { cls: 'panel status warn', label: '待登录', sub: '登录 tailnet 之后代理才能用', pwrLabel: '断开 VPN', login: true, chain: true, lat: '—', unit: '', tsub: 'op12-petrel · 等待批准', tval: '待登录', tcls: 'val warn' },
+      '未连接': { cls: 'panel status off', label: '未连接', sub: '点电源键，或用状态栏快捷开关', pwrLabel: '连接 VPN', login: false, chain: false, lat: '—', unit: '', tsub: '未启动', tval: '—', tcls: 'val' }
+    };
+    const cur = (this.state && this.state.st) || this.props.state || '已连接';
+    const s = M[cur] || M['已连接'];
+    const toggle = () => {
+      clearTimeout(this._t);
+      if (cur === '未连接') {
+        this.setState({ st: '连接中' });
+        this._t = setTimeout(() => this.setState({ st: '已连接' }), 1400);
+      } else {
+        this.setState({ st: '未连接' });
+      }
+    };
+    const dark = this.props.dark ?? true;
+    return { theme: dark ? 'dark' : 'light', s, toggle };
+  }
+}
+</script>
+</body>
+</html>

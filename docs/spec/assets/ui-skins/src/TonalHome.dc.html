@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Tonal 连接</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@400..700&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400..600,0..1,0&amp;display=block">
+<style>
+body{margin:0}
+.phone{--pri:#415F91;--onPri:#FFFFFF;--priC:#D6E3FF;--onPriC:#001B3E;--secC:#DAE2F9;--onSecC:#131C2B;--terC:#FAD8FD;--onTerC:#28132E;--sf:#F9F9FF;--sfC:#EDEDF4;--sfH:#E7E8EE;--sfHH:#E2E2E9;--on:#191C20;--onV:#44474E;--outV:#C4C6D0;--okC:#C2EFCB;--onOkC:#0A3A1E;--warnC:#FFDEA6;--onWarnC:#3A2800;--ui:"Google Sans Flex","Outfit","Noto Sans SC",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;width:390px;height:844px;position:relative;overflow:hidden;background:var(--sf);color:var(--on);font-family:var(--ui);font-size:14px;line-height:1.4;-webkit-font-smoothing:antialiased}
+.phone[data-theme="dark"]{--pri:#AAC7FF;--onPri:#0A305F;--priC:#284777;--onPriC:#D6E3FF;--secC:#3E4759;--onSecC:#DAE2F9;--terC:#573E5C;--onTerC:#FAD8FD;--sf:#111318;--sfC:#1D2024;--sfH:#282A2F;--sfHH:#33353A;--on:#E2E2E9;--onV:#C4C6D0;--outV:#44474E;--okC:#1E5132;--onOkC:#BDEFC9;--warnC:#5C4300;--onWarnC:#FFDEA6}
+.phone *{box-sizing:border-box}
+:where(.phone) a{color:inherit;text-decoration:none}
+:where(.phone) button{font:inherit;color:inherit;border:0;background:none;padding:0;margin:0;cursor:pointer;text-align:left}
+.ms{font-family:"Material Symbols Rounded";font-weight:normal;font-style:normal;font-size:24px;line-height:1;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;direction:ltr;-webkit-font-smoothing:antialiased;font-feature-settings:"liga";font-variation-settings:"FILL" 0,"wght" 400;user-select:none;flex:none}
+.ms.f{font-variation-settings:"FILL" 1,"wght" 400}
+.tbar{height:64px;display:flex;align-items:center;gap:4px;padding:0 4px 0 20px}
+.tbar h1{margin:0;font:500 28px/1.2 var(--ui)}
+.sp{flex:1}
+.icb{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;color:var(--onV)}
+.scroll{position:absolute;left:0;right:0;top:64px;bottom:80px;overflow-y:auto;scrollbar-width:none;padding:0 16px 20px}
+.scroll::-webkit-scrollbar{display:none}
+.hero{display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 0 22px}
+.ck{position:relative;width:176px;height:176px;display:grid;place-items:center;border-radius:50%}
+.ck .shape{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.ck .shape path{fill:var(--pri);transition:d .5s cubic-bezier(.3,.9,.3,1),fill .3s}
+.ck>.ms{position:relative;font-size:60px;color:var(--onPri);transition:color .3s}
+.ck.busy .shape{animation:spin 5s linear infinite}
+.ck.busy .shape path{fill:var(--priC)}
+.ck.busy>.ms{color:var(--onPriC)}
+.ck.warn .shape path{fill:var(--warnC)}
+.ck.warn>.ms{color:var(--onWarnC)}
+.ck.off .shape path{fill:var(--sfHH)}
+.ck.off>.ms{color:var(--onV)}
+.hstate{margin-top:18px;font:500 28px/1.2 var(--ui)}
+.hsub{margin-top:6px;font-size:14px;color:var(--onV)}
+.fbtn{display:inline-flex;align-items:center;gap:8px;height:40px;margin-top:16px;padding:0 20px 0 16px;border-radius:20px;background:var(--pri);color:var(--onPri);font:500 14px var(--ui)}
+.fbtn .ms{font-size:18px}
+.group{margin-bottom:16px}
+.ghead{display:flex;align-items:center;min-height:36px;padding:0 4px 4px;font:500 14px/20px var(--ui);color:var(--pri)}
+.tlink{display:inline-flex;align-items:center;min-height:40px;padding:0 8px;font:500 14px var(--ui);color:var(--pri)}
+.item{display:flex;align-items:center;gap:14px;width:100%;min-height:68px;padding:10px 16px;margin-bottom:2px;background:var(--sfC);border-radius:6px}
+.item.first{border-radius:22px 22px 6px 6px}
+.item.last{border-radius:6px 6px 22px 22px;margin-bottom:0}
+.item.sel{background:var(--priC);color:var(--onPriC)}
+.av{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--sfHH);color:var(--onV);flex:none}
+.av .ms{font-size:22px}
+.av.pri{background:var(--pri);color:var(--onPri)}
+.item .g{flex:1;min-width:0}
+.item b{display:block;font:500 14.5px/1.3 var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item small{display:block;margin-top:2px;font-size:13px;color:var(--onV)}
+.item.sel small{color:var(--onPriC);opacity:.78}
+.badge{font:500 12px/1 var(--ui);padding:7px 10px;border-radius:999px;background:var(--okC);color:var(--onOkC);white-space:nowrap;flex:none}
+.badge.warn{background:var(--warnC);color:var(--onWarnC)}
+.badge.idle{background:var(--sfHH);color:var(--onV)}
+.duo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.tc{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:140px;padding:16px;min-width:0;text-align:left}
+.tc.ter{background:var(--terC);color:var(--onTerC);border-radius:28px 28px 28px 10px}
+.tc.sec{background:var(--secC);color:var(--onSecC);border-radius:28px 28px 10px 28px}
+.tc>.ms{margin-bottom:auto}
+.tc .k{margin-top:16px;font:500 13px var(--ui);opacity:.78}
+.tc .v{font:500 26px/1.15 var(--ui)}
+.tc .v.sm{margin:6px 0 2px;font:500 14px/1.3 var(--mono);overflow-wrap:anywhere}
+.tc .d{font:400 12px var(--mono);opacity:.78}
+.nav{position:absolute;left:0;right:0;bottom:0;height:80px;background:var(--sfC);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:12px 0 16px}
+.nav a{display:flex;flex-direction:column;align-items:center;gap:4px;font:500 12px/16px var(--ui);color:var(--onV)}
+.nav .pill{width:56px;height:32px;border-radius:16px;display:grid;place-items:center}
+.nav a.on{color:var(--on);font-weight:700}
+.nav a.on .pill{background:var(--secC);color:var(--onSecC)}
+.nav a.on .ms{font-variation-settings:"FILL" 1,"wght" 400}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</helmet>
+<div class="phone" data-theme="{{theme}}">
+  <header class="tbar">
+    <h1>Petrel</h1>
+    <span class="sp"></span>
+    <button class="icb" type="button" aria-label="配置"><span class="ms">description</span></button>
+  </header>
+  <main class="scroll">
+    <section class="hero">
+      <button class="{{s.ck}}" type="button" aria-label="{{s.btnLabel}}" onClick="{{toggle}}">
+        <svg class="shape" viewBox="0 0 200 200" aria-hidden="true"><path d="{{s.path}}"></path></svg>
+        <span class="ms f">power_settings_new</span>
+      </button>
+      <div class="hstate">{{s.label}}</div>
+      <div class="hsub">{{s.sub}}</div>
+      <sc-if value="{{s.login}}" hint-placeholder-val="{{ false }}">
+        <a class="fbtn" href="TonalTailnet.dc.html"><span class="ms">login</span>去登录 tailnet</a>
+      </sc-if>
+    </section>
+
+    <sc-if value="{{s.chain}}" hint-placeholder-val="{{ true }}">
+      <section class="group">
+        <div class="ghead">当前链路<span class="sp"></span><a class="tlink" href="TonalNodes.dc.html">切换出口</a></div>
+        <div class="item first"><span class="av"><span class="ms">lan</span></span><div class="g"><b>ts</b><small>tailnet 第一跳</small></div></div>
+        <div class="item"><span class="av"><span class="ms">swap_horiz</span></span><div class="g"><b>tc-u-se-ss-front</b><small>代理前置</small></div></div>
+        <a class="item last sel" href="TonalNodes.dc.html"><span class="av pri"><span class="ms f">public</span></span><div class="g"><b>us-lax-ntt-via-tcuse</b><small>出口 · PROXY</small></div><span class="{{s.badge}}">{{s.latText}}</span></a>
+      </section>
+    </sc-if>
+
+    <section class="duo">
+      <a class="tc ter" href="TonalTailnet.dc.html">
+        <span class="ms">hub</span>
+        <span class="k">tailnet</span>
+        <span class="v">{{s.tv}}</span>
+        <span class="d">{{s.td}}</span>
+      </a>
+      <button class="tc sec" type="button">
+        <span class="ms">description</span>
+        <span class="k">配置</span>
+        <span class="v sm">op12.local.yaml</span>
+        <span class="d">10月2日导入</span>
+      </button>
+    </section>
+  </main>
+  <nav class="nav" aria-label="主导航">
+    <a class="on" href="TonalHome.dc.html"><span class="pill"><span class="ms">power_settings_new</span></span>连接</a>
+    <a href="TonalNodes.dc.html"><span class="pill"><span class="ms">route</span></span>节点</a>
+    <a href="TonalTailnet.dc.html"><span class="pill"><span class="ms">hub</span></span>tailnet</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"state":{"editor":"enum","options":["已连接","连接中","待登录","未连接"],"default":"已连接"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  componentDidUpdate(prev) {
+    if (prev.state !== this.props.state && this.state && this.state.st) this.setState({ st: null });
+  }
+  componentWillUnmount() { clearTimeout(this._t); }
+  renderVals() {
+    const COOKIE = 'M100.0 0.0 104.3 0.8 108.5 3.0 112.3 6.4 115.8 10.4 119.0 14.5 121.9 18.2 124.9 21.1 128.0 22.9 131.6 23.6 135.8 23.3 140.4 22.3 145.5 21.2 150.7 20.3 155.8 20.2 160.5 21.2 164.3 23.4 167.1 26.8 168.8 31.2 169.6 36.2 169.7 41.5 169.5 46.7 169.3 51.5 169.7 55.6 171.0 59.0 173.3 61.8 176.7 64.2 180.9 66.5 185.5 68.9 190.1 71.6 194.0 74.8 197.0 78.5 198.5 82.6 198.5 87.0 197.0 91.5 194.4 95.9 191.0 100.0 187.5 103.8 184.3 107.4 182.0 110.8 180.8 114.2 180.7 117.9 181.8 121.9 183.5 126.3 185.5 131.1 187.3 136.1 188.2 141.1 188.1 145.9 186.6 150.0 183.8 153.4 179.8 155.8 174.9 157.5 169.7 158.5 164.6 159.2 159.8 159.8 155.9 161.0 152.7 162.8 150.3 165.6 148.5 169.3 147.0 173.8 145.5 178.8 143.6 183.8 141.1 188.2 138.0 191.8 134.2 194.0 129.9 194.7 125.2 194.0 120.4 192.2 115.8 189.6 111.4 186.8 107.4 184.3 103.6 182.6 100.0 182.0 96.4 182.6 92.6 184.3 88.6 186.8 84.2 189.6 79.6 192.2 74.8 194.0 70.1 194.7 65.8 194.0 62.0 191.8 58.9 188.2 56.4 183.8 54.5 178.8 53.0 173.8 51.5 169.3 49.7 165.6 47.3 162.8 44.1 161.0 40.2 159.8 35.4 159.2 30.3 158.5 25.1 157.5 20.2 155.8 16.2 153.4 13.4 150.0 11.9 145.9 11.8 141.1 12.7 136.1 14.5 131.1 16.5 126.3 18.2 121.9 19.3 117.9 19.2 114.2 18.0 110.8 15.7 107.4 12.5 103.8 9.0 100.0 5.6 95.9 3.0 91.5 1.5 87.0 1.5 82.6 3.0 78.5 6.0 74.8 9.9 71.6 14.5 68.9 19.1 66.5 23.3 64.2 26.7 61.8 29.0 59.0 30.3 55.6 30.7 51.5 30.5 46.7 30.3 41.5 30.4 36.2 31.2 31.2 32.9 26.8 35.7 23.4 39.5 21.2 44.2 20.2 49.3 20.3 54.5 21.2 59.6 22.3 64.2 23.3 68.4 23.6 72.0 22.9 75.1 21.1 78.1 18.2 81.0 14.5 84.2 10.4 87.7 6.4 91.5 3.0 95.7 0.8Z';
+    const CIRCLE = 'M100.0 6.0 104.1 6.1 108.2 6.4 112.3 6.8 116.3 7.4 120.3 8.2 124.3 9.2 128.3 10.4 132.1 11.7 136.0 13.2 139.7 14.8 143.4 16.6 147.0 18.6 150.5 20.7 153.9 23.0 157.2 25.4 160.4 28.0 163.5 30.7 166.5 33.5 169.3 36.5 172.0 39.6 174.6 42.8 177.0 46.1 179.3 49.5 181.4 53.0 183.4 56.6 185.2 60.3 186.8 64.0 188.3 67.9 189.6 71.7 190.8 75.7 191.8 79.7 192.6 83.7 193.2 87.7 193.6 91.8 193.9 95.9 194.0 100.0 193.9 104.1 193.6 108.2 193.2 112.3 192.6 116.3 191.8 120.3 190.8 124.3 189.6 128.3 188.3 132.1 186.8 136.0 185.2 139.7 183.4 143.4 181.4 147.0 179.3 150.5 177.0 153.9 174.6 157.2 172.0 160.4 169.3 163.5 166.5 166.5 163.5 169.3 160.4 172.0 157.2 174.6 153.9 177.0 150.5 179.3 147.0 181.4 143.4 183.4 139.7 185.2 136.0 186.8 132.1 188.3 128.3 189.6 124.3 190.8 120.3 191.8 116.3 192.6 112.3 193.2 108.2 193.6 104.1 193.9 100.0 194.0 95.9 193.9 91.8 193.6 87.7 193.2 83.7 192.6 79.7 191.8 75.7 190.8 71.7 189.6 67.9 188.3 64.0 186.8 60.3 185.2 56.6 183.4 53.0 181.4 49.5 179.3 46.1 177.0 42.8 174.6 39.6 172.0 36.5 169.3 33.5 166.5 30.7 163.5 28.0 160.4 25.4 157.2 23.0 153.9 20.7 150.5 18.6 147.0 16.6 143.4 14.8 139.7 13.2 136.0 11.7 132.1 10.4 128.3 9.2 124.3 8.2 120.3 7.4 116.3 6.8 112.3 6.4 108.2 6.1 104.1 6.0 100.0 6.1 95.9 6.4 91.8 6.8 87.7 7.4 83.7 8.2 79.7 9.2 75.7 10.4 71.7 11.7 67.9 13.2 64.0 14.8 60.3 16.6 56.6 18.6 53.0 20.7 49.5 23.0 46.1 25.4 42.8 28.0 39.6 30.7 36.5 33.5 33.5 36.5 30.7 39.6 28.0 42.8 25.4 46.1 23.0 49.5 20.7 53.0 18.6 56.6 16.6 60.3 14.8 64.0 13.2 67.9 11.7 71.7 10.4 75.7 9.2 79.7 8.2 83.7 7.4 87.7 6.8 91.8 6.4 95.9 6.1Z';
+    const M = {
+      '已连接': { ck: 'ck', path: COOKIE, btnLabel: '断开 VPN', label: '已连接', sub: '代理与 tailnet 都已就绪', login: false, chain: true, badge: 'badge warn', latText: '182 ms', tv: '5/6 在线', td: '100.64.0.20' },
+      '连接中': { ck: 'ck busy', path: COOKIE, btnLabel: '断开 VPN', label: '连接中', sub: '正在启动 tailnet 与代理', login: false, chain: false, badge: 'badge idle', latText: '—', tv: '—', td: '正在启动' },
+      '待登录': { ck: 'ck warn', path: COOKIE, btnLabel: '断开 VPN', label: '待登录', sub: '登录 tailnet 之后代理才能用', login: true, chain: true, badge: 'badge idle', latText: '—', tv: '待登录', td: '等待批准' },
+      '未连接': { ck: 'ck off', path: CIRCLE, btnLabel: '连接 VPN', label: '未连接', sub: '点上面的按钮，或用状态栏快捷开关', login: false, chain: false, badge: 'badge idle', latText: '—', tv: '—', td: '未启动' }
+    };
+    const cur = (this.state && this.state.st) || this.props.state || '已连接';
+    const s = M[cur] || M['已连接'];
+    const toggle = () => {
+      clearTimeout(this._t);
+      if (cur === '未连接') {
+        this.setState({ st: '连接中' });
+        this._t = setTimeout(() => this.setState({ st: '已连接' }), 1400);
+      } else {
+        this.setState({ st: '未连接' });
+      }
+    };
+    return { theme: this.props.dark ? 'dark' : 'light', s, toggle };
+  }
+}
+</script>
+</body>
+</html>

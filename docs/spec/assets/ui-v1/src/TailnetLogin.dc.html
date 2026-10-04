@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>tailnet · 待登录</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+a:hover{color:inherit}
+.pt{--bg:#F2F5F6;--surface:#FFFFFF;--surface-2:#E7ECEE;--ink:#11181C;--ink-2:#4A5761;--line:#D2DADE;--accent:#0C6A76;--on-accent:#FFFFFF;--accent-soft:#D3EBEE;--ok:#1B7346;--warn:#985200;--warn-soft:#F8E8D2;--err:#B3261E;--err-soft:#FBE2DF}
+.pt.dark{--bg:#0C1114;--surface:#141B1F;--surface-2:#1D262B;--ink:#E4EAED;--ink-2:#9AA8B0;--line:#28333A;--accent:#61C3CF;--on-accent:#05181B;--accent-soft:#11343A;--ok:#5ECA8F;--warn:#E6A64B;--warn-soft:#33261A;--err:#F28B82;--err-soft:#3A1C1A}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.ic{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+</style>
+</helmet>
+<div class="{{theme}}" style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: var(--bg); color: var(--ink); font-family: 'Noto Sans SC', sans-serif; overflow: hidden">
+<header style="display: flex; align-items: center; padding: 22px 20px 10px">
+<h1 style="margin: 0; font-size: 22px; font-weight: 700">tailnet</h1>
+</header>
+<main style="flex-grow: 1; display: flex; flex-direction: column; gap: 14px; padding: 6px 16px 16px">
+<section aria-label="需要登录" style="background: var(--warn-soft); border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px; color: var(--warn)"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v5.5M12 16.5v.01"></path></svg><span style="font-size: 18px; font-weight: 700">需要登录 tailnet</span></div>
+<p style="margin: 0; font-size: 14px; line-height: 1.65; color: var(--ink)">登录之前代理用不了：所有出口都经 tailnet 出去。</p>
+</section>
+<section aria-label="登录链接" style="background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px">
+<span style="font-size: 12.5px; color: var(--ink-2)">登录链接</span>
+<div class="mono" style="font-size: 13px; background: var(--surface-2); border-radius: 12px; padding: 12px 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">https://login.tailscale.com/a/xxxxxxxxxxxx</div>
+<p style="margin: 0; font-size: 12.5px; line-height: 1.65; color: var(--ink-2)">手机上多半打不开登录页（第三方账号登录要走代理，而代理还没通）。复制到电脑浏览器里批准，批准后这里自动变成已连接。</p>
+<div style="display: flex; gap: 10px">
+<button type="button" style="flex-grow: 1; display: flex; align-items: center; justify-content: center; gap: 8px; height: 48px; border-radius: 24px; border: 0; background: var(--accent); color: var(--on-accent); font-family: 'Noto Sans SC', sans-serif; font-size: 15px; font-weight: 500; cursor: pointer"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path></svg>复制链接</button>
+<button type="button" style="flex-grow: 1; display: flex; align-items: center; justify-content: center; gap: 8px; height: 48px; border-radius: 24px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-family: 'Noto Sans SC', sans-serif; font-size: 15px; font-weight: 500; cursor: pointer"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"></path><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>浏览器打开</button>
+</div>
+</section>
+<section aria-label="本机" style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 14px 20px; display: flex; align-items: center; gap: 12px">
+<span style="font-size: 12.5px; color: var(--ink-2)">本机</span>
+<span class="mono" style="font-size: 14px; font-weight: 500; flex-grow: 1">op12-petrel</span>
+<span style="font-size: 12.5px; color: var(--warn)">等待批准</span>
+</section>
+</main>
+<nav aria-label="主导航" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 10px 8px 26px; background: var(--surface); border-top: 1px solid var(--line)">
+<a href="Main.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 56px; color: var(--ink-2)">
+<span style="width: 64px; height: 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v8"></path><path d="M6.3 6.3a8 8 0 1 0 11.4 0"></path></svg></span>
+<span style="font-size: 12px; font-weight: 500">连接</span>
+</a>
+<a href="Nodes.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 56px; color: var(--ink-2)">
+<span style="width: 64px; height: 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="6" r="1.8"></circle><circle cx="5.5" cy="12" r="1.8"></circle><circle cx="5.5" cy="18" r="1.8"></circle><path d="M10 6h10M10 12h10M10 18h10"></path></svg></span>
+<span style="font-size: 12px; font-weight: 500">节点</span>
+</a>
+<a href="TailnetLogin.dc.html" aria-current="page" style="display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 56px; color: var(--ink)">
+<span style="width: 64px; height: 32px; border-radius: 16px; background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; justify-content: center"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2.2"></circle><circle cx="5" cy="18" r="2.2"></circle><circle cx="19" cy="18" r="2.2"></circle><path d="M11 7 6 16M13 7l5 9M7.2 18h9.6"></path></svg></span>
+<span style="font-size: 12px; font-weight: 700">tailnet</span>
+</a>
+</nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false,"section":"主题"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return { theme: this.props.dark ? 'pt dark' : 'pt' };
+}
+}
+</script>
+</body>
+</html>

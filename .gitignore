@@ -1,0 +1,23 @@
+.gradle/
+build/
+*/build/
+local.properties
+.idea/
+.DS_Store
+*.log
+.anvil/scratchpad/
+
+# 签名密钥，绝不入仓库
+*.keystore
+*.jks
+keystore.properties
+
+# 测试用 mihomo 配置含节点凭据，只在本机与设备上存在，绝不入仓库
+*.local.yaml
+
+# gomobile 产物，由 core/build.sh 生成
+app/libs/
+
+# 维护者本机层：本机环境事实与个人工作流，不入库（AGENTS.md 开头有说明）
+AGENTS.local.md
+CLAUDE.local.md

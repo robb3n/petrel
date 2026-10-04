@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>快捷开关与常驻通知</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+a:hover{color:inherit}
+.pt{--bg:#F2F5F6;--surface:#FFFFFF;--surface-2:#E7ECEE;--ink:#11181C;--ink-2:#4A5761;--line:#D2DADE;--accent:#0C6A76;--on-accent:#FFFFFF;--accent-soft:#D3EBEE;--ok:#1B7346;--warn:#985200;--warn-soft:#F8E8D2;--err:#B3261E;--err-soft:#FBE2DF}
+.pt.dark{--bg:#0C1114;--surface:#141B1F;--surface-2:#1D262B;--ink:#E4EAED;--ink-2:#9AA8B0;--line:#28333A;--accent:#61C3CF;--on-accent:#05181B;--accent-soft:#11343A;--ok:#5ECA8F;--warn:#E6A64B;--warn-soft:#33261A;--err:#F28B82;--err-soft:#3A1C1A}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.icf{fill:currentColor;flex-shrink:0}
+</style>
+</helmet>
+<div class="{{theme}}" style="width: 390px; height: 620px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px; padding: 24px 16px; background: var(--bg); color: var(--ink); font-family: 'Noto Sans SC', sans-serif; overflow: hidden">
+<h2 style="margin: 0 4px; font-size: 13px; font-weight: 500; color: var(--ink-2)">快捷开关（四种状态）</h2>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<div style="display: flex; align-items: center; gap: 12px; height: 72px; padding: 0 16px; border-radius: 36px; background: var(--accent); color: var(--on-accent)">
+<svg class="icf" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M2,17h2.2a7.8,7.8 0,0 1,15.6 0H22v2H17.8v-2a5.8,5.8 0,0 0,-11.6 0v2H2z"></path><path d="M2,9h20v2H2z"></path></svg>
+<span style="display: flex; flex-direction: column"><span style="font-size: 14px; font-weight: 700">Petrel</span><span style="font-size: 12px">已连接</span></span>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; height: 72px; padding: 0 16px; border-radius: 36px; background: var(--accent-soft); color: var(--ink)">
+<svg class="icf" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" style="color: var(--accent)"><path d="M2,17h2.2a7.8,7.8 0,0 1,15.6 0H22v2H17.8v-2a5.8,5.8 0,0 0,-11.6 0v2H2z"></path><path d="M2,9h20v2H2z"></path></svg>
+<span style="display: flex; flex-direction: column"><span style="font-size: 14px; font-weight: 700">Petrel</span><span style="font-size: 12px; color: var(--ink-2)">连接中</span></span>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; height: 72px; padding: 0 16px; border-radius: 36px; background: var(--accent); color: var(--on-accent)">
+<svg class="icf" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M2,17h2.2a7.8,7.8 0,0 1,15.6 0H22v2H17.8v-2a5.8,5.8 0,0 0,-11.6 0v2H2z"></path><path d="M2,9h20v2H2z"></path></svg>
+<span style="display: flex; flex-direction: column"><span style="font-size: 14px; font-weight: 700">Petrel</span><span style="font-size: 12px">待登录</span></span>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; height: 72px; padding: 0 16px; border-radius: 36px; background: var(--surface-2); color: var(--ink)">
+<svg class="icf" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" style="color: var(--ink-2)"><path d="M2,17h2.2a7.8,7.8 0,0 1,15.6 0H22v2H17.8v-2a5.8,5.8 0,0 0,-11.6 0v2H2z"></path><path d="M2,9h20v2H2z"></path></svg>
+<span style="display: flex; flex-direction: column"><span style="font-size: 14px; font-weight: 700">Petrel</span><span style="font-size: 12px; color: var(--ink-2)">未连接</span></span>
+</div>
+</div>
+<h2 style="margin: 10px 4px 0; font-size: 13px; font-weight: 500; color: var(--ink-2)">常驻通知</h2>
+<div style="background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 14px 16px 8px; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-2)">
+<span style="width: 20px; height: 20px; border-radius: 10px; background: var(--accent); color: var(--on-accent); display: flex; align-items: center; justify-content: center"><svg class="icf" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M2,17h2.2a7.8,7.8 0,0 1,15.6 0H22v2H17.8v-2a5.8,5.8 0,0 0,-11.6 0v2H2z"></path><path d="M2,9h20v2H2z"></path></svg></span>
+<span>Petrel · 连接状态</span>
+</div>
+<div style="font-size: 15px; font-weight: 700; margin-top: 4px">已连接</div>
+<div style="font-size: 13px; line-height: 1.6; color: var(--ink-2)">出口 <span class="mono">us-lax-ntt-via-tcuse</span> · tailnet <span class="mono">100.64.0.20</span></div>
+<div style="display: flex; gap: 4px; margin-left: -10px">
+<button type="button" style="height: 44px; padding: 0 12px; border: 0; background: transparent; color: var(--accent); font-family: 'Noto Sans SC', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer">断开</button>
+</div>
+</div>
+<div style="background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 14px 16px 8px; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-2)">
+<span style="width: 20px; height: 20px; border-radius: 10px; background: var(--accent); color: var(--on-accent); display: flex; align-items: center; justify-content: center"><svg class="icf" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M2,17h2.2a7.8,7.8 0,0 1,15.6 0H22v2H17.8v-2a5.8,5.8 0,0 0,-11.6 0v2H2z"></path><path d="M2,9h20v2H2z"></path></svg></span>
+<span>Petrel · 连接状态</span>
+</div>
+<div style="font-size: 15px; font-weight: 700; margin-top: 4px">需要登录 tailnet</div>
+<div style="font-size: 13px; line-height: 1.6; color: var(--ink-2)">登录之前代理用不了</div>
+<div style="display: flex; gap: 4px; margin-left: -10px">
+<button type="button" style="height: 44px; padding: 0 12px; border: 0; background: transparent; color: var(--accent); font-family: 'Noto Sans SC', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer">复制登录链接</button>
+<button type="button" style="height: 44px; padding: 0 12px; border: 0; background: transparent; color: var(--accent); font-family: 'Noto Sans SC', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer">断开</button>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false,"section":"主题"},"$preview":{"width":390,"height":620}}'>
+class Component extends DCLogic {
+renderVals() {
+return { theme: this.props.dark ? 'pt dark' : 'pt' };
+}
+}
+</script>
+</body>
+</html>

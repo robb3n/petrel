@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>配置</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+a:hover{color:inherit}
+.pt{--bg:#F2F5F6;--surface:#FFFFFF;--surface-2:#E7ECEE;--ink:#11181C;--ink-2:#4A5761;--line:#D2DADE;--accent:#0C6A76;--on-accent:#FFFFFF;--accent-soft:#D3EBEE;--ok:#1B7346;--warn:#985200;--warn-soft:#F8E8D2;--err:#B3261E;--err-soft:#FBE2DF}
+.pt.dark{--bg:#0C1114;--surface:#141B1F;--surface-2:#1D262B;--ink:#E4EAED;--ink-2:#9AA8B0;--line:#28333A;--accent:#61C3CF;--on-accent:#05181B;--accent-soft:#11343A;--ok:#5ECA8F;--warn:#E6A64B;--warn-soft:#33261A;--err:#F28B82;--err-soft:#3A1C1A}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.ic{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+</style>
+</helmet>
+<div class="{{theme}}" style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: var(--bg); color: var(--ink); font-family: 'Noto Sans SC', sans-serif; overflow: hidden">
+<header style="display: flex; align-items: center; gap: 4px; padding: 14px 16px 6px 8px">
+<a href="Main.dc.html" aria-label="返回" style="width: 44px; height: 44px; border-radius: 22px; display: flex; align-items: center; justify-content: center"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg></a>
+<h1 style="margin: 0; font-size: 20px; font-weight: 700">配置</h1>
+</header>
+<main style="flex-grow: 1; display: flex; flex-direction: column; gap: 14px; padding: 10px 16px 16px">
+<section aria-label="当前配置" style="background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 18px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span style="width: 44px; height: 44px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; justify-content: center; flex-shrink: 0"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg></span>
+<span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+<span class="mono" style="font-size: 15px; font-weight: 500">op12.local.yaml</span>
+<span style="font-size: 12.5px; color: var(--ink-2)">10月2日 21:40 导入</span>
+</span>
+</div>
+<div style="display: flex; align-items: center; gap: 8px; color: var(--ok); font-size: 13px; font-weight: 500"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg>校验通过</div>
+</section>
+<button type="button" style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 52px; border-radius: 26px; border: 0; background: var(--accent); color: var(--on-accent); font-family: 'Noto Sans SC', sans-serif; font-size: 16px; font-weight: 500; cursor: pointer"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5"></path><path d="M5 20h14"></path></svg>导入 YAML…</button>
+<p style="margin: -2px 8px 0; font-size: 12.5px; line-height: 1.65; color: var(--ink-2)">先校验，通过才替换现有配置；VPN 运行中会自动重启生效。</p>
+<section aria-label="GeoIP 数据库" style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 8px 8px 8px 18px; display: flex; align-items: center; gap: 10px">
+<span style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 14px; font-weight: 500">GeoIP 数据库</span>
+<span class="mono" style="font-size: 12px; color: var(--ink-2)">Country.mmdb · 已就绪</span>
+</span>
+<button type="button" style="height: 44px; padding: 0 14px; border-radius: 22px; border: 0; background: transparent; color: var(--accent); font-family: 'Noto Sans SC', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer">替换…</button>
+</section>
+<section aria-label="Petrel 改写的部分" style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px">
+<span style="font-size: 12.5px; color: var(--ink-2)">加载时 Petrel 会改写这些，配置里不用写</span>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span class="mono" style="font-size: 13.5px; font-weight: 500">ts</span>
+<span style="font-size: 12.5px; color: var(--ink-2)">注入的 tailnet 节点，用 dialer-proxy: ts 引用</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span class="mono" style="font-size: 13.5px; font-weight: 500">tun</span>
+<span style="font-size: 12.5px; color: var(--ink-2)">接管为 Petrel 的 VPN，固定 gvisor</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span class="mono" style="font-size: 13.5px; font-weight: 500">external-controller</span>
+<span style="font-size: 12.5px; color: var(--ink-2)">固定 127.0.0.1:9090</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span class="mono" style="font-size: 13.5px; font-weight: 500">interface-name · routing-mark</span>
+<span style="font-size: 12.5px; color: var(--ink-2)">删除（桌面端残留）</span>
+</div>
+</section>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false,"section":"主题"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return { theme: this.props.dark ? 'pt dark' : 'pt' };
+}
+}
+</script>
+</body>
+</html>

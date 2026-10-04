@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Petrel" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#14120E</item>
+        <item name="android:windowSplashScreenBackground">#14120E</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
+    </style>
+</resources>

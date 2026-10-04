@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ 的系统启动页：底色 = Shoal 的 wall token（浅），图标透明。启动页由主题决定、早于读偏好，
+         所以只能跟系统明暗；明暗设置与系统相反时，启动页那一瞬仍是系统明暗的底色 -->
+    <style name="Theme.Petrel" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#E9E1D3</item>
+        <item name="android:windowSplashScreenBackground">#E9E1D3</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
+    </style>
+</resources>

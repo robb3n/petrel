@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 暗色下的窗口底色 = Shoal 的 wall token（深），避免启动瞬间闪一下白底 -->
+    <style name="Theme.Petrel" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#14120E</item>
+    </style>
+</resources>
