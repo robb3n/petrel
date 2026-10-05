@@ -6,7 +6,7 @@ plugins {
 
 // 版本号（同 Mu3ic）：versionCode = git 提交计数，同一个提交重建得到同一个 build 号；
 // 回火任务的 forge 只改下面这一行 baseVersionName，不再手动改 versionCode。
-val baseVersionName = "0.1.0"
+val baseVersionName = "0.1.1"
 
 // 没有 git 历史（GitHub 自动生成的源码压缩包）或根本没装 git 时返回 null，版本号退成 <base>-src、build 1，不让构建失败
 fun gitOutput(vararg args: String): String? = runCatching {
