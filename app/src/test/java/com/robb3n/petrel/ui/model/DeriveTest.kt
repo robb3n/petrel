@@ -8,15 +8,20 @@ import com.robb3n.petrel.ImportUi
 import com.robb3n.petrel.PeerPath
 import com.robb3n.petrel.ProxyGroupUi
 import com.robb3n.petrel.ProxyUi
+import com.robb3n.petrel.Skin
 import com.robb3n.petrel.TailnetPeerUi
 import com.robb3n.petrel.TailnetSelfUi
 import com.robb3n.petrel.TailnetStatusUi
+import com.robb3n.petrel.UiTone
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.TimeZone
+
+/** 测试里本机在 tailnet 里的节点名。 */
+private const val HOST = "op12-petrel"
 
 private fun state(vpn: String = "running", tailnet: String = "Running", ips: List<String> = listOf("100.64.0.20"), error: String = "") =
     CoreState(vpn = vpn, tailnet = tailnet, tailnetIPs = ips, loginURL = "", error = error)
@@ -228,6 +233,11 @@ class RouteStationsTest {
 }
 
 class NodesTest {
+    @Test fun testLabelFollowsTesting() {
+        assertEquals("测延迟", buildNodes(state(), emptyList(), testing = false).testLabel)
+        assertEquals("测速中", buildNodes(state(), emptyList(), testing = true).testLabel)
+    }
+
     @Test fun subtitleViaIsReversedChainWithoutSelf() {
         assertEquals("经 tc-u-se-ss-front → ts", proxySubtitle(proxy("us", listOf("ts", "tc-u-se-ss-front", "us"))))
         assertEquals("经 ts", proxySubtitle(proxy("x", listOf("ts", "x"))))
@@ -370,19 +380,23 @@ class TailnetTest {
     }
 
     @Test fun pages() {
-        assertEquals(TailnetUi.NotActive, buildTailnet(CoreState.STOPPED, null))
-        assertEquals(TailnetUi.NeedsLogin(""), buildTailnet(state(tailnet = "NeedsLogin"), null))
-        val login = buildTailnet(state(tailnet = "NeedsLogin").copy(loginURL = "https://x/y"), null) as TailnetUi.NeedsLogin
+        assertEquals(TailnetUi.NotActive, buildTailnet(CoreState.STOPPED, null, HOST))
+        assertEquals(TailnetUi.NeedsLogin("", HOST), buildTailnet(state(tailnet = "NeedsLogin"), null, HOST))
+        val login = buildTailnet(state(tailnet = "NeedsLogin").copy(loginURL = "https://x/y"), null, HOST) as TailnetUi.NeedsLogin
         assertTrue(login.ready)
-        val loading = buildTailnet(state(), null) as TailnetUi.Running
+        val loading = buildTailnet(state(), null, HOST) as TailnetUi.Running
         assertTrue(loading.connected)
         assertNull(loading.selfName)
         assertNull(loading.peers)
         assertEquals("100.64.0.20", loading.selfIp)
-        val starting = buildTailnet(state(vpn = "starting", tailnet = "Starting"), null) as TailnetUi.Running
+        val starting = buildTailnet(state(vpn = "starting", tailnet = "Starting"), null, HOST) as TailnetUi.Running
         assertFalse(starting.connected)
         assertEquals("Starting", starting.state)
-        val full = buildTailnet(state(), status(peer("hu", PeerPath.Direct))) as TailnetUi.Running
+        assertEquals("Starting", starting.statusLabel)
+        assertEquals(StatusTone.Warn, starting.statusTone)
+        assertEquals("已连接", loading.statusLabel)
+        assertEquals(StatusTone.Live, loading.statusTone)
+        val full = buildTailnet(state(), status(peer("hu", PeerPath.Direct)), HOST) as TailnetUi.Running
         assertEquals("op12-petrel", full.selfName)
         assertEquals(1, full.peers!!.size)
         assertEquals(1, full.summary!!.direct)
@@ -401,7 +415,7 @@ class HomeTest {
     )
 
     @Test fun connected() {
-        val ui = buildHome(state(), cfg, ImportUi(), groups, st, zone = utc)
+        val ui = buildHome(state(), cfg, ImportUi(), groups, st, HOST, zone = utc)
         assertEquals(ConnStatus.Connected, ui.status)
         assertEquals(3, ui.chain.size)
         assertEquals(Delay(182), ui.exitDelay)
@@ -411,7 +425,7 @@ class HomeTest {
         assertEquals(1, ui.tailnet!!.online)
         assertEquals("op12-petrel · 100.64.0.20", ui.tailnetSub)
         assertEquals(TailnetCard("1/2 在线", "100.64.0.20"), ui.tailnetCard)
-        assertEquals(TailnetEnd.Online(1, 2), ui.tailnetEnd)
+        assertEquals(TailnetEnd.Online(ui.tailnet!!), ui.tailnetEnd)
         assertEquals("10月2日", ui.config.dateShort)
         assertEquals("10月2日 00:00", ui.config.dateTime)
         assertEquals("10-02", ui.config.dateNight)
@@ -419,16 +433,17 @@ class HomeTest {
     }
 
     @Test fun refreshFollowsRunningAndTesting() {
-        val running = buildHome(state(), cfg, ImportUi(), groups, null, testing = true, zone = utc)
+        val running = buildHome(state(), cfg, ImportUi(), groups, null, HOST, testing = true, zone = utc)
         assertTrue(running.canRefresh)
         assertTrue(running.refreshing)
-        val off = buildHome(CoreState.STOPPED, cfg, ImportUi(), groups, null, zone = utc)
+        val off = buildHome(CoreState.STOPPED, cfg, ImportUi(), groups, null, HOST, zone = utc)
         assertFalse(off.canRefresh)
         assertFalse(off.refreshing)
     }
 
     @Test fun needsLoginKeepsChainButHidesDelayAndPeers() {
-        val ui = buildHome(state(tailnet = "NeedsLogin"), cfg, ImportUi(), groups, null, zone = utc)
+        // 带着上一段的节点数据：守卫（tailnet 必须 Running）要把它挡掉，不能显示旧的在线数
+        val ui = buildHome(state(tailnet = "NeedsLogin"), cfg, ImportUi(), groups, st, HOST, zone = utc)
         assertEquals(ConnStatus.NeedsLogin, ui.status)
         assertEquals(3, ui.chain.size)
         assertEquals(Delay.UNKNOWN, ui.exitDelay)
@@ -440,7 +455,8 @@ class HomeTest {
     }
 
     @Test fun connectingHasNoChainNoStats() {
-        val ui = buildHome(state(vpn = "starting", tailnet = "NoState", ips = emptyList()), cfg, ImportUi(), emptyList(), null, zone = utc)
+        // 组数据还在（上一次运行留下的）：连接中不显示链路，靠的是 showChain 的 running 守卫
+        val ui = buildHome(state(vpn = "starting", tailnet = "NoState", ips = emptyList()), cfg, ImportUi(), groups, st, HOST, zone = utc)
         assertEquals(ConnStatus.Connecting, ui.status)
         assertTrue(ui.chain.isEmpty())
         assertNull(ui.groupSize)
@@ -452,20 +468,20 @@ class HomeTest {
     }
 
     @Test fun offAndNoConfig() {
-        val off = buildHome(CoreState.STOPPED, cfg, ImportUi(), groups, null, zone = utc)
+        val off = buildHome(CoreState.STOPPED, cfg, ImportUi(), groups, null, HOST, zone = utc)
         assertEquals(ConnStatus.Off, off.status)
         assertTrue(off.chain.isEmpty())
         assertEquals(Delay.UNKNOWN, off.exitDelay)
         assertEquals("未启动", off.tailnetSub)
         assertEquals(TailnetCard("—", "未启动"), off.tailnetCard)
-        val none = buildHome(CoreState.STOPPED, ConfigInfo(false, "config.yaml", 0, false), ImportUi(busy = true), emptyList(), null, zone = utc)
+        val none = buildHome(CoreState.STOPPED, ConfigInfo(false, "config.yaml", 0, false), ImportUi(busy = true), emptyList(), null, HOST, zone = utc)
         assertEquals(ConnStatus.NoConfig, none.status)
         assertTrue(none.importing)
         assertEquals("", none.config.dateShort)
     }
 
     @Test fun runningWithoutStatusYetShowsIpOnly() {
-        val ui = buildHome(state(), cfg, ImportUi(), groups, null, zone = utc)
+        val ui = buildHome(state(), cfg, ImportUi(), groups, null, HOST, zone = utc)
         assertNull(ui.tailnet)
         assertEquals("op12-petrel · 100.64.0.20", ui.tailnetSub)
         assertEquals(TailnetEnd.None, ui.tailnetEnd)
@@ -474,16 +490,39 @@ class HomeTest {
     }
 
     @Test fun runningWithoutIpFallsBackToHostname() {
-        val ui = buildHome(state(ips = emptyList()), cfg, ImportUi(), groups, null, zone = utc)
+        val ui = buildHome(state(ips = emptyList()), cfg, ImportUi(), groups, null, HOST, zone = utc)
         assertEquals("op12-petrel", ui.tailnetSub)
         assertEquals(TailnetCard("—", "op12-petrel"), ui.tailnetCard)
     }
 
     @Test fun otherTailnetStateAndError() {
-        val ui = buildHome(state(tailnet = "Starting", error = "boom"), cfg, ImportUi(), groups, null, zone = utc)
+        val ui = buildHome(state(tailnet = "Starting", error = "boom"), cfg, ImportUi(), groups, null, HOST, zone = utc)
         assertEquals(ConnStatus.TailnetOther("Starting"), ui.status)
         assertEquals(TailnetEnd.Other("Starting"), ui.tailnetEnd)
         assertEquals("boom", ui.error)
+    }
+
+    @Test fun exitDelayShowsEllipsisWhileRefreshing() {
+        val idle = buildHome(state(), cfg, ImportUi(), groups, st, HOST, zone = utc)
+        assertEquals("182 ms", idle.exitView.text)
+        val refreshing = buildHome(state(), cfg, ImportUi(), groups, st, HOST, testing = true, zone = utc)
+        assertEquals("…", refreshing.exitView.text)
+        assertEquals(Band.Idle, refreshing.exitView.band)
+        assertEquals("…", refreshing.exitView.readout.value)
+        assertEquals(ReadoutTone.Idle, refreshing.exitView.readout.tone)
+    }
+
+    @Test fun hostnameComesFromInput() {
+        val ui = buildHome(state(), cfg, ImportUi(), groups, st, "pjd110-petrel", zone = utc)
+        assertEquals("pjd110-petrel · 100.64.0.20", ui.tailnetSub)
+        val login = buildTailnet(state(tailnet = "NeedsLogin"), null, "pjd110-petrel") as TailnetUi.NeedsLogin
+        assertEquals("pjd110-petrel", login.hostname)
+    }
+
+    @Test fun importLabelFollowsBusy() {
+        val none = ConfigInfo(false, "config.yaml", 0, false)
+        assertEquals("导入 YAML…", buildHome(CoreState.STOPPED, none, ImportUi(), emptyList(), null, HOST, zone = utc).importLabel)
+        assertEquals("校验中…", buildHome(CoreState.STOPPED, none, ImportUi(busy = true), emptyList(), null, HOST, zone = utc).importLabel)
     }
 
     @Test fun updatedWhenNotImportedThroughUi() {
@@ -493,16 +532,18 @@ class HomeTest {
 
     @Test fun groupWithoutSelectedMemberHasNoChainButKeepsSize() {
         val g = listOf(group(now = "gone", proxy("a", listOf("ts", "a"), 50)))
-        val ui = buildHome(state(), cfg, ImportUi(), g, null, zone = utc)
+        val ui = buildHome(state(), cfg, ImportUi(), g, null, HOST, zone = utc)
         assertTrue(ui.chain.isEmpty())
         assertEquals(Delay.UNKNOWN, ui.exitDelay)
         assertEquals(1, ui.groupSize)
     }
 }
 
+private val sum56 = TailnetSummary(ip = null, online = 5, total = 6, direct = 0, relay = 0)
+
 class TailnetCardTest {
     @Test fun countsAndText() {
-        assertEquals(TailnetCard("5/6 在线", "100.64.0.20"), tailnetCard("100.64.0.20", TailnetEnd.Online(5, 6)))
+        assertEquals(TailnetCard("5/6 在线", "100.64.0.20"), tailnetCard("100.64.0.20", TailnetEnd.Online(sum56)))
         assertEquals(TailnetCard("待登录", "等待批准"), tailnetCard("等待批准", TailnetEnd.NeedsLogin))
         assertEquals(TailnetCard("Starting", "100.64.0.20"), tailnetCard("100.64.0.20", TailnetEnd.Other("Starting")))
         assertEquals(TailnetCard("—", "未启动"), tailnetCard("未启动", TailnetEnd.None))
@@ -511,8 +552,8 @@ class TailnetCardTest {
 
 class EndViewTest {
     @Test fun spacedVariantIsShoalsAndTightIsTheOthers() {
-        assertEquals(TailnetEndView("5 / 6 在线", EndTone.Ok), TailnetEnd.Online(5, 6).view(spaced = true))
-        assertEquals(TailnetEndView("5/6 在线", EndTone.Ok), TailnetEnd.Online(5, 6).view(spaced = false))
+        assertEquals(TailnetEndView("5 / 6 在线", EndTone.Ok), TailnetEnd.Online(sum56).view(spaced = true))
+        assertEquals(TailnetEndView("5/6 在线", EndTone.Ok), TailnetEnd.Online(sum56).view(spaced = false))
     }
 
     @Test fun otherEndsDoNotDependOnSpacing() {
@@ -577,6 +618,32 @@ class ConfigUiTest {
         assertEquals("10月2日导入", s.stampShort)
         assertEquals("10-02 导入", s.stampNight)
         assertEquals("10月2日 00:00 导入", s.stampFull)
+        // 没有配置时没有日期，也不能剩下孤零零的「更新」
+        val none = configSummary(ConfigInfo(false, "config.yaml", 0, false), utc)
+        assertEquals("", none.stampShort)
+        assertEquals("", none.stampNight)
+        assertEquals("", none.stampFull)
+    }
+
+    @Test fun verifiedAndStillInUseAreExclusive() {
+        assertTrue(buildConfig(info, ImportUi(), null, false, utc).verified)
+        val failed = buildConfig(info, ImportUi(error = ImportError("x")), null, false, utc)
+        assertTrue(failed.stillInUse)
+        assertFalse(failed.verified)
+        assertFalse(buildConfig(info.copy(imported = false), ImportUi(), null, false, utc).verified)
+    }
+
+    @Test fun buttonLabels() {
+        assertEquals("导入 YAML…", buildConfig(info, ImportUi(), null, false, utc).importLabel)
+        assertEquals("校验中…", buildConfig(info, ImportUi(busy = true), null, false, utc).importLabel)
+        assertEquals("替换…", buildConfig(info, ImportUi(), null, false, utc).geoButtonLabel)
+        assertEquals("校验中…", buildConfig(info, ImportUi(), null, true, utc).geoButtonLabel)
+    }
+
+    @Test fun settingsConfigRowWithoutConfig() {
+        val none = ConfigInfo(false, "config.yaml", 0, false)
+        assertEquals("还没有配置", buildSettings(Skin.Shoal, listOf(Skin.Shoal), UiTone.Auto, "0.1.0", none).configName)
+        assertEquals("op12.local.yaml", buildSettings(Skin.Shoal, listOf(Skin.Shoal), UiTone.Auto, "0.1.0", info).configName)
     }
 
     @Test fun geoText() {
@@ -591,7 +658,10 @@ class ConfigUiTest {
 
     @Test fun rewritesMentionEveryControllerEntryRemoval() {
         val rows = buildConfig(info, ImportUi(), null, false, utc).rewrites
-        assertEquals(listOf("ts", "tun", "external-controller", "interface-name · routing-mark", "petrel-via"), rows.map { it.key })
+        assertEquals(
+            listOf("ts", "tun", "external-controller", "interface-name · routing-mark", "listeners · tunnels", "petrel-via"),
+            rows.map { it.key },
+        )
         assertTrue(rows.first { it.key == "external-controller" }.desc.contains("其余 controller 入口一律删除"))
     }
 

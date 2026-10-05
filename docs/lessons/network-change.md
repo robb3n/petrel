@@ -62,3 +62,15 @@ ColorOS 的 logcat 主缓冲区只有 256 KiB，系统日志又很多，几十�
 - debug 包会把每次底层网络回调追加到 `files/netevents.log`，用 `run-as com.robb3n.petrel cat files/netevents.log` 读。
 
 切网命令是 `adb shell cmd wifi set-wifi-enabled disabled|enabled`。蜂窝数据要开着。测完必须恢复 Wi-Fi。
+
+## 节点名：首次注册时生成，之后不再改
+
+节点名原来写死成维护者手机的 `op12-petrel`，公开发布后每个用户的设备都会叫这个名字。现在由 Kotlin 侧的 `TailnetHostname` 决定，经 `Ptcore.start` 的参数传给 tsnet：
+
+- 首次注册时用机型生成：`Build.MODEL` 转小写，非字母数字换成 `-`，截到 40 个字符，再加 `-petrel`，例如一加 12 是 `pjd110-petrel`。名字写进 `files/tailnet-hostname`，之后一直沿用，换系统版本或改了机型字串也不变。
+- 老安装没有这个文件、但 `files/tsnet/` 里已有节点状态（节点名还写死在代码里时注册的）时，写入并沿用 `op12-petrel`，已注册节点的名字不会因为升级而变。
+- 卸载会连同 `files/` 一起删掉，重装后按新机器注册，名字重新生成。
+- 文件先写临时文件再改名：写到一半被杀不会留下空文件，否则空文件加上已有的 tsnet 状态会被当成老安装。写不进去（磁盘满）也不报错，这一次照样用算出来的名字，下次启动再写。已知的边角：新装机器首次注册时恰好写失败，下次启动会被当成老安装，名字退回 `op12-petrel`。概率极低，没有另加防护。
+- Go 侧没有节点名常量：节点列表里 Self 没带名字时用 `tsnet.Server.Hostname` 兜底；空名字直接让 `Start` 失败。
+- tsnet 的两路日志（`Logf` 里控制面客户端的 `AuthURL is <链接>`、`UserLogf` 里的 `… or go to: <链接>`）都会打出完整登录链接，一律经 `redactLoginURLs` 换成 `<login URL>`。完整链接只许出现在 `watchTailnet` 打的 `tailnet login URL:` 那一行。
+

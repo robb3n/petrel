@@ -2,7 +2,6 @@ package com.robb3n.petrel.ui.skin.shoal
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
@@ -34,12 +33,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,6 +64,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.robb3n.petrel.ui.spinning
 import com.robb3n.petrel.ui.bounceClick
 import com.robb3n.petrel.ui.longPressOnly
 import com.robb3n.petrel.ui.model.Band
@@ -389,13 +388,6 @@ fun ShoalIconButton(
     spin: Boolean = false,
 ) {
     val c = Shoal.colors
-    // 匀速旋转 .9s/圈；只在 [spin] 时才起动画
-    val angle: State<Float>? = if (spin) {
-        rememberInfiniteTransition(label = "iconSpin")
-            .animateFloat(0f, 360f, infiniteRepeatable(tween(900, easing = LinearEasing)), label = "angle")
-    } else {
-        null
-    }
     Box(
         modifier
             .size(40.dp)
@@ -405,7 +397,7 @@ fun ShoalIconButton(
         contentAlignment = Alignment.Center,
     ) {
         val fg = tint ?: c.tx2
-        Icon(icon, null, tint = if (enabled || spin) fg else fg.copy(alpha = 0.38f), modifier = Modifier.size(iconSize).graphicsLayer { rotationZ = angle?.value ?: 0f })
+        Icon(icon, null, tint = if (enabled || spin) fg else fg.copy(alpha = 0.38f), modifier = Modifier.size(iconSize).spinning(spin))
     }
 }
 
@@ -431,7 +423,7 @@ fun MiniBtn(
     val c = Shoal.colors
     val h = when (size) { MiniSize.Small -> 26.dp; MiniSize.Medium -> 30.dp; MiniSize.OnWall -> 32.dp }
     val fontSize = if (size == MiniSize.Small) 12f else 12.5f
-    val iconSize = if (size == MiniSize.Small) 16.dp else if (size == MiniSize.Medium) 17.dp else 17.dp
+    val iconSize = if (size == MiniSize.Small) 16.dp else 17.dp
     val face = if (size == MiniSize.OnWall) Modifier.pillSurface(c, PillShape) else Modifier.clip(PillShape).background(c.sf2)
     val fg = if (enabled) c.tx else c.tx2
     val start = when {
@@ -440,13 +432,6 @@ fun MiniBtn(
         else -> 10.dp
     }
     val end = if (trailingIcon != null) 6.dp else if (size == MiniSize.Small) 10.dp else 12.dp
-    // 匀速旋转 .9s/圈；只在测速中才起动画
-    val angle: State<Float>? = if (spin) {
-        rememberInfiniteTransition(label = "miniSpin")
-            .animateFloat(0f, 360f, infiniteRepeatable(tween(900, easing = LinearEasing)), label = "angle")
-    } else {
-        null
-    }
     Row(
         modifier
             .bounceClick(onClickLabel = text, enabled = enabled, role = Role.Button, onClick = onClick)
@@ -457,7 +442,7 @@ fun MiniBtn(
         horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
     ) {
         leadingIcon?.let {
-            Icon(it, null, tint = fg, modifier = Modifier.size(iconSize).graphicsLayer { rotationZ = angle?.value ?: 0f })
+            Icon(it, null, tint = fg, modifier = Modifier.size(iconSize).spinning(spin))
         }
         CssText(text, ui(fontSize, FontWeight.Medium, fontSize * 1.35f), fg, softWrap = false)
         trailingIcon?.let { Icon(it, null, tint = fg, modifier = Modifier.size(iconSize)) }
@@ -478,8 +463,8 @@ fun OlBtn(
     enabled: Boolean = true,
 ) {
     val c = Shoal.colors
-    val bg = if (!enabled) c.sf3 else if (onHero) Color(0xFFFFF6E0) else c.ol
-    val fg = if (!enabled) c.tx2 else if (onHero) Color(0xFF705A0F) else c.onol
+    val bg = if (!enabled) c.sf3 else if (onHero) c.heroInk else c.ol
+    val fg = if (!enabled) c.tx2 else if (onHero) c.heroOnInk else c.onol
     Row(
         modifier
             .bounceClick(onClickLabel = text, enabled = enabled, role = Role.Button, onClick = onClick)
@@ -520,7 +505,7 @@ fun Sw(
     val c = Shoal.colors
     val (trackOn, trackOff, knobOn, knobOff) = when (style) {
         SwStyle.Plain -> listOf(c.ol, c.sf3, c.onol, c.knob)
-        SwStyle.Hero -> listOf(Color(0xFFFFF6E0), Color(0x3DFFF6E0), Color(0xFF705A0F), Color(0xBFFFF6E0))
+        SwStyle.Hero -> listOf(c.heroInk, c.heroInk.copy(alpha = 0.24f), c.heroOnInk, c.heroInk.copy(alpha = 0.75f))
     }
     val track by animateColorAsState(if (checked) trackOn else trackOff, tween(200), label = "swTrack")
     val knob by animateColorAsState(if (checked) knobOn else knobOff, tween(200), label = "swKnob")

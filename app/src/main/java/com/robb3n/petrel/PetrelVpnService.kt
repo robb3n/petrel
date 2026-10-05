@@ -59,7 +59,7 @@ class PetrelVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         lastStartId = startId
         if (intent?.action == ACTION_COPY_LOGIN) {
-            copyLoginUrl()
+            copyLoginUrl(this)
             // 通知可能是残留的：服务本来没在跑时，这次调用不该把它留下来
             if (!active()) stopSelf(startId)
             return stickyIfActive()
@@ -92,12 +92,6 @@ class PetrelVpnService : VpnService() {
 
     private fun stickyIfActive() = if (active()) START_STICKY else START_NOT_STICKY
 
-    private fun copyLoginUrl() {
-        val url = CoreBridge.state.value.loginURL
-        if (url.isEmpty()) return
-        copyToClipboard(this, "tailnet login", url, "已复制登录链接")
-        Log.i(TAG, "copied tailnet login url") // 不记 URL 本身
-    }
 
     /** [startId] 是排队它的那次启动请求的 id：失败要停服务时，只在期间没有更新的请求时才停。 */
     private fun startVpn(startId: Int) {
@@ -129,11 +123,13 @@ class PetrelVpnService : VpnService() {
                 .addDisallowedApplication(packageName)
                 .setUnderlyingNetworks(null)
                 .setConfigureIntent(
-                    PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+                    PendingIntent.getActivity(
+                        this, RequestCodes.VPN_CONFIGURE, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE,
+                    )
                 )
                 .establish()
         } catch (e: Exception) {
-            failAndStop("建立 VPN 失败：${e.message}", startId)
+            failAndStop("建立 VPN 失败：${e.message}", startId, "建立 VPN 失败：${e.javaClass.simpleName}")
             return
         }
         if (pfd == null) {
@@ -142,14 +138,23 @@ class PetrelVpnService : VpnService() {
         }
         val fd = pfd.detachFd()
         try {
-            Ptcore.start(filesDir.absolutePath, config.absolutePath, fd.toLong(), CoreBridge)
+            Ptcore.start(filesDir.absolutePath, config.absolutePath, fd.toLong(), TailnetHostname.get(this), CoreBridge)
         } catch (e: Exception) {
-            // fd 已交给 Go：失败时由 Go 侧关闭或交 mihomo 清理，这里不再碰它，免得重复关闭误伤被复用的编号
-            failAndStop("启动内核失败：${e.message}", startId)
+            // fd 已交给 Go：失败时由 Go 侧关闭或交 mihomo 清理，这里不再碰它，免得重复关闭误伤被复用的编号。
+            // Go 的错误形如「parse config: <mihomo 的解析错误>」，后半段可能带配置行与凭据：日志只记我们自己加的前缀
+            val msg = e.message.orEmpty()
+            failAndStop("启动内核失败：$msg", startId, "启动内核失败：${msg.substringBefore(':').ifEmpty { e.javaClass.simpleName }}")
             return
         }
         running = true
-        registerNetworkCallback()
+        try {
+            registerNetworkCallback()
+        } catch (e: Exception) {
+            // 不包的话异常会从 worker 抛出、杀掉整个进程；没有网络回调切网后 tailnet 不会恢复，所以按启动失败处理
+            stopCore()
+            failAndStop("监听网络变化失败：${e.javaClass.simpleName}", startId)
+            return
+        }
         Log.i(TAG, "vpn started")
     }
 
@@ -194,10 +199,11 @@ class PetrelVpnService : VpnService() {
         startVpn(startId)
     }
 
-    private fun failAndStop(message: String, startId: Int) {
+    /** [logLine] 见 [CoreBridge.fail]：[message] 带着异常信息时给一个不含它的日志版本。 */
+    private fun failAndStop(message: String, startId: Int, logLine: String = message) {
         unregisterNetworkCallback()
         running = false
-        CoreBridge.fail(message)
+        CoreBridge.fail(message, logLine)
         stopService(startId)
     }
 

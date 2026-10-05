@@ -101,6 +101,7 @@ Android 常驻代理 App：把 mihomo 内核和一个内置 tailnet 节点（tsn
 - **`versionCode` = git 提交计数 + 12**（`git rev-list --count HEAD` 加上开源前压掉的 12 个提交，见 `squashedCommits`；自动算，永远不手动改；同一提交重建得到同一个 build 号）。
 - **`versionName` 自动推出**：HEAD 上有 tag `v<baseVersionName>` 且已跟踪文件没有未提交改动 → `<baseVersionName>`（稳定版）；否则 `<baseVersionName>-dev.<build>`（如 `0.1.0-dev.12`，未跟踪文件不算改动）。
 - 升版本只改 `baseVersionName` 那一行，并在那个提交上打 tag `v<baseVersionName>`。
+- 没有 git 历史时（GitHub 自动生成的源码压缩包）照样能构建：`versionName` 退成 `<baseVersionName>-src`、`versionCode` 为 1。这种包只供自行构建，不进侧载存档、不发布。
 
 ## Local Deploy
 
@@ -126,7 +127,7 @@ opt-in `/release`，只由人发起。发布的是回火任务的 stamp 打过 t
 签名与构建的事实：
 
 - **release 包** = release 构建类型（非 debuggable，不开 R8）+ 正式 release key + 只含 arm64-v8a（`libgojni.so` 单个 ABI 约 60 MB）。debug 包仍是 arm64-v8a + x86_64、debug key。
-- **release key**：PKCS12，别名 `petrel`，RSA 4096，有效期 100 年。文件路径与口令只在构建机 `~/.gradle/gradle.properties` 的 `petrel.release.storeFile` / `storePassword` / `keyAlias` / `keyPassword`，**不进仓库、不打印到终端、日志或对话**；属性缺了，`assembleRelease` 直接失败并指出缺哪个，不会退回 debug key。工作副本与备份位置见 `AGENTS.local.md`。
+- **release key**：PKCS12，别名 `petrel`，RSA 4096，有效期 100 年。文件路径与口令只在构建机 `~/.gradle/gradle.properties` 的 `petrel.release.storeFile`（绝对路径，或以 `~/` 开头）/ `storePassword` / `keyAlias` / `keyPassword`，**不进仓库、不打印到终端、日志或对话**；属性缺了，`assembleRelease` 直接失败并指出缺哪个，不会退回 debug key。工作副本与备份位置见 `AGENTS.local.md`。
 - **正式证书 SHA-256**：`94096a8fa7821aab4437210421bd4879304cffab8f3d52d98a7eef2506038a7d`（同步在 `scripts/publish-release.sh` 的 `OFFICIAL_CERT_SHA256`；`apksigner verify --print-certs` 核对）。**别换这把 key**：换了，已装用户无法覆盖升级。
 - release 包与 debug 包签名不同，不能互相覆盖安装：已装 debug 包的设备（如维护者的测试真机）要换成 release 包只能先卸载，tailnet 节点状态与配置会一起丢。
 
@@ -135,7 +136,7 @@ opt-in `/release`，只由人发起。发布的是回火任务的 stamp 打过 t
 - **新功能 = `ui/model` 推导一次 + 三套皮肤各画一次**：数据推导（状态映射、链路、延迟分档、文案）只写在 `ui/model/`（纯函数，JVM 单测 `./gradlew :app:testDebugUnitTest`），皮肤包（`ui/skin/<shoal|night|tonal>/`）只渲染模型、调用 `PetrelActions`，**不直接读 repository 或 `CoreBridge`**。动皮肤、系统栏、冷启动底色之前先读 `docs/lessons/skins.md`。
 - 项目级踩坑落 `docs/lessons/`，随 stamp 进 git（如 VPN 自环、tsnet 网络切换、各 ROM 的快捷开关与后台行为）。
 - **动 VpnService 的防自环方式、tun stack 或 mihomo 构建标签之前，先读 `docs/lessons/vpn-tun-stack.md`**。三者互相牵制：本 App 排除出 VPN 就只能用 gvisor；不带 `cmfa` 标签 TUN 建不起来。
-- **动网络回调、`ptcore` 的锁或 tsnet 的日志之前，先读 `docs/lessons/network-change.md`**。要点：
+- **动网络回调、`ptcore` 的锁、tsnet 的日志或本机的 tailnet 节点名之前，先读 `docs/lessons/network-change.md`**。要点：
   - 跟踪 NOT_VPN 网络，不用 `registerDefaultNetworkCallback`。
   - 切网要调 `NetMon.InjectEvent()` 唤醒 tsnet。
   - 持有 `mu` 时不得调用 tsnet / mihomo / Host，否则会和 tailscale 的 Logf 互相卡死。

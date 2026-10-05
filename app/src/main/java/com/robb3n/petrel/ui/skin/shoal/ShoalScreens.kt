@@ -42,13 +42,14 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.border
 import androidx.compose.material3.Text
 import com.robb3n.petrel.ui.model.ConfigUi
 import com.robb3n.petrel.ui.model.ConnStatus
-import com.robb3n.petrel.ui.model.Delay
+import com.robb3n.petrel.ui.model.DelayView
 import com.robb3n.petrel.ui.model.HomeUi
 import com.robb3n.petrel.ui.model.Hop
 import com.robb3n.petrel.ui.model.HopRole
@@ -175,23 +176,21 @@ private fun Modifier.heroSurface(c: ShoalColors, shape: Shape): Modifier =
         }
         .border(0.5.dp, c.isleRing, shape)
 
-private val HeroInk = Color(0xFFFFF6E0)
-
 @Composable
 private fun Hero(ui: HomeUi, a: PetrelActions) {
     val c = Shoal.colors
     val status = ui.status
     val off = status == ConnStatus.Off || status == ConnStatus.NoConfig
     val surface = if (off) Modifier.isleSurface(c, ScrollShape24) else Modifier.heroSurface(c, ScrollShape24)
-    val fg = if (off) c.tx else HeroInk
-    val subColor = if (off) c.tx2 else HeroInk.copy(alpha = 0.85f)
+    val fg = if (off) c.tx else c.heroInk
+    val subColor = if (off) c.tx2 else c.heroInk.copy(alpha = 0.85f)
     Column(Modifier.fillMaxWidth().then(surface).padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 14.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
                 CssText(status.label, ui(22f, FontWeight.SemiBold, 27.5f), fg)
                 CssLines(status.sub("点右边的开关，或用状态栏快捷开关"), ui(12f), subColor, Modifier.padding(top = 4.dp))
                 if (ui.error.isNotEmpty()) {
-                    val errColor = if (off) c.redFg else HeroInk
+                    val errColor = if (off) c.redFg else c.heroInk
                     Row(
                         Modifier.padding(top = 6.dp).semantics { liveRegion = LiveRegionMode.Polite },
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -215,7 +214,7 @@ private fun Hero(ui: HomeUi, a: PetrelActions) {
         if (status != ConnStatus.NoConfig) {
             val bg = if (off) c.sf2 else c.sf
             Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                val d = ui.exitDelay.readout
+                val d = ui.exitView.readout
                 // 点格子进对应的 tab（同 Mu3ic 首页统计格）：pager 滑过去，底栏胶囊跟着滑
                 Stat(
                     value = d.value, unit = d.unit,
@@ -235,7 +234,7 @@ private fun Hero(ui: HomeUi, a: PetrelActions) {
             OlBtn("去登录 tailnet", a.openTailnet, Modifier.padding(top = 12.dp), icon = Ms.login, onHero = true)
         }
         if (status == ConnStatus.NoConfig) {
-            OlBtn(if (ui.importing) "校验中…" else "导入 YAML…", a.importConfig, Modifier.padding(top = 12.dp), icon = Ms.download, enabled = !ui.importing)
+            OlBtn(ui.importLabel, a.importConfig, Modifier.padding(top = 12.dp), icon = Ms.download, enabled = !ui.importing)
         }
     }
 }
@@ -283,7 +282,11 @@ private fun ChainIsle(ui: HomeUi, a: PetrelActions) {
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             ui.chain.forEachIndexed { i, hop ->
-                HopRow(hop, last = i == ui.chain.lastIndex, group = ui.groupName ?: "", delay = ui.exitDelay, onClick = a.openNodes)
+                // 每跳往下画到下一跳里的连接线要压在下一跳的底色（出口的 butter）之上：前面的行 zIndex 更高、后画
+                HopRow(
+                    hop, last = i == ui.chain.lastIndex, group = ui.groupName ?: "", delay = ui.exitView, onClick = a.openNodes,
+                    modifier = Modifier.zIndex((ui.chain.size - i).toFloat()),
+                )
             }
         }
     }
@@ -294,7 +297,7 @@ private fun ChainIsle(ui: HomeUi, a: PetrelActions) {
  * 末跳是出口，`.hop.sel`（`--butter` 底），带延迟徽章。
  */
 @Composable
-private fun HopRow(hop: Hop, last: Boolean, group: String, delay: Delay, onClick: () -> Unit) {
+private fun HopRow(hop: Hop, last: Boolean, group: String, delay: DelayView, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = Shoal.colors
     val exit = hop.role == HopRole.Exit
     val shape = RoundedCornerShape(14.dp)
@@ -305,7 +308,7 @@ private fun HopRow(hop: Hop, last: Boolean, group: String, delay: Delay, onClick
     }
     val sub = hop.role.caption(group, detailed = true)
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
             .drawBehind {
                 if (!last) {
@@ -331,8 +334,7 @@ private fun HopRow(hop: Hop, last: Boolean, group: String, delay: Delay, onClick
             CssText(sub, ui(11.5f), c.tx2, Modifier.padding(top = 1.dp))
         }
         if (exit) {
-            val v = delay.view(testing = false)
-            LatBadge(v.text, v.band)
+            LatBadge(delay.text, delay.band)
         }
     }
 }
@@ -377,7 +379,6 @@ private fun FirstUseIsle() {
 
 @Composable
 internal fun ShoalNodes(ui: NodesUi, a: PetrelActions) {
-    val c = Shoal.colors
     if (!ui.running) {
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
             ShoalAppBar("节点", end = 14.dp)
@@ -389,7 +390,7 @@ internal fun ShoalNodes(ui: NodesUi, a: PetrelActions) {
         appBar = {
             ShoalAppBar("节点", end = 14.dp, actions = {
                 MiniBtn(
-                    if (ui.testing) "测速中" else "测延迟", a.testDelay,
+                    ui.testLabel, a.testDelay,
                     size = MiniSize.OnWall, leadingIcon = Ms.speed, enabled = !ui.testing, spin = ui.testing,
                 )
             })
@@ -496,7 +497,7 @@ private fun TailnetLogin(ui: TailnetUi.NeedsLogin, a: PetrelActions) {
         Gap(12.dp)
         Isle(padding = 6.dp) {
             ListRow(
-                com.robb3n.petrel.TAILNET_HOSTNAME, sub = "本机",
+                ui.hostname, sub = "本机",
                 leading = { Tile(Ms.smartphone, TileTone.Mint) },
                 trailing = { Tag("等待批准", kind = TagKind.Warn) },
             )
@@ -521,7 +522,7 @@ private fun TailnetRunning(ui: TailnetUi.Running, a: PetrelActions) {
         appBar = {
             ShoalAppBar(
                 "tailnet",
-                titleTrailing = { Tag(if (ui.connected) "已连接" else ui.state, kind = if (ui.connected) TagKind.Live else TagKind.Warn) },
+                titleTrailing = { Tag(ui.statusLabel, kind = if (ui.statusTone == StatusTone.Live) TagKind.Live else TagKind.Warn) },
             )
         },
         floatingNav = true,
@@ -621,11 +622,11 @@ internal fun ShoalConfig(ui: ConfigUi, a: PetrelActions) {
                 tile = { Tile(Ms.description, TileTone.Butter) },
             )
             // 只有经界面导入、校验过的配置才有这一行；push-config.sh 推入的没有元数据
-            if (cfg.imported) Tag("校验通过", Modifier.padding(top = 10.dp), kind = TagKind.Live)
+            if (ui.verified) Tag("校验通过", Modifier.padding(top = 10.dp), kind = TagKind.Live)
         }
         Gap(12.dp)
         OlBtn(
-            if (ui.importing) "校验中…" else "导入 YAML…", a.importConfig,
+            ui.importLabel, a.importConfig,
             Modifier.fillMaxWidth(), icon = Ms.download, enabled = !ui.importing,
         )
         Foot("先校验，通过才替换现有配置；VPN 运行中会自动重启生效。", side = 6.dp)
@@ -634,7 +635,7 @@ internal fun ShoalConfig(ui: ConfigUi, a: PetrelActions) {
             ListRow(
                 "GeoIP 数据库", sub = "Country.mmdb · ${ui.geoText}", subColor = if (ui.geoBad) c.redFg else c.tx2,
                 leading = { Tile(Ms.public, TileTone.Mint) },
-                trailing = { MiniBtn(if (ui.geoBusy) "校验中…" else "替换…", a.replaceGeoIp, enabled = !ui.geoBusy) },
+                trailing = { MiniBtn(ui.geoButtonLabel, a.replaceGeoIp, enabled = !ui.geoBusy) },
             )
         }
         Gap(12.dp)

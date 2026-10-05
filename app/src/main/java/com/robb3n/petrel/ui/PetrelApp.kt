@@ -27,6 +27,7 @@ import com.robb3n.petrel.BuildConfig
 import com.robb3n.petrel.ConfigRepository
 import com.robb3n.petrel.CoreBridge
 import com.robb3n.petrel.GroupsRepository
+import com.robb3n.petrel.TailnetHostname
 import com.robb3n.petrel.TailnetRepository
 import com.robb3n.petrel.UiPrefs
 import com.robb3n.petrel.copyToClipboard
@@ -148,6 +149,8 @@ fun PetrelApp(
     // 非连接页的 tab 上按返回 = 回连接页；连接页再按返回才退出（同 Mu3ic）
     BackHandler(enabled = onTabs && pager.current != Tab.Home) { pager.select(Tab.Home) }
 
+    // 本机在 tailnet 里的节点名：首次注册前就要显示（待批准那一行），文件很小，组合期读一次
+    val hostname = remember { TailnetHostname.get(ctx) }
     val actions = remember(nav, pager) {
         PetrelActions(
             toggle = onToggle,
@@ -190,11 +193,11 @@ fun PetrelApp(
                 HorizontalPager(pager.state, Modifier.fillMaxSize(), beyondViewportPageCount = pager.tabs.size - 1) { page ->
                     when (pager.tabs[page]) {
                         Tab.Home -> skin.Home(
-                            remember(s, config, import, groups, tailnet, testing) { buildHome(s, config, import, groups, tailnet, testing) },
+                            remember(s, config, import, groups, tailnet, testing) { buildHome(s, config, import, groups, tailnet, hostname, testing) },
                             actions,
                         )
                         Tab.Nodes -> skin.Nodes(remember(s, groups, testing) { buildNodes(s, groups, testing) }, actions)
-                        Tab.Tailnet -> skin.Tailnet(remember(s, tailnet) { buildTailnet(s, tailnet) }, actions)
+                        Tab.Tailnet -> skin.Tailnet(remember(s, tailnet) { buildTailnet(s, tailnet, hostname) }, actions)
                     }
                 }
             }

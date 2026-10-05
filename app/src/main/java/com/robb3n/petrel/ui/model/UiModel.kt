@@ -179,7 +179,7 @@ data class TailnetSummary(val ip: String?, val online: Int, val total: Int, val 
 /** 连接页 tailnet 行 / 卡的右侧值。 */
 sealed interface TailnetEnd {
     data object None : TailnetEnd
-    data class Online(val online: Int, val total: Int) : TailnetEnd
+    data class Online(val summary: TailnetSummary) : TailnetEnd
     data object NeedsLogin : TailnetEnd
     data class Other(val state: String) : TailnetEnd
 }
@@ -192,7 +192,7 @@ data class TailnetEndView(val text: String?, val tone: EndTone)
 /** [spaced] = true 写 `5 / 6 在线`（Shoal 画稿），否则 `5/6 在线`（夜航、Tonal）。 */
 fun TailnetEnd.view(spaced: Boolean): TailnetEndView = when (this) {
     TailnetEnd.None -> TailnetEndView(null, EndTone.Plain)
-    is TailnetEnd.Online -> TailnetEndView((if (spaced) "$online / $total" else "$online/$total") + " 在线", EndTone.Ok)
+    is TailnetEnd.Online -> TailnetEndView(if (spaced) summary.onlineLabel else "${summary.ratio} 在线", EndTone.Ok)
     TailnetEnd.NeedsLogin -> TailnetEndView("待登录", EndTone.Warn)
     is TailnetEnd.Other -> TailnetEndView(state, EndTone.Warn)
 }
@@ -211,14 +211,14 @@ data class ConfigSummary(
     /** `MM-dd` */
     val dateNight: String,
 ) {
-    /** `10月3日导入`（Shoal 与 Tonal 的连接页）。 */
-    val stampShort: String get() = "$dateShort$verb"
+    /** `10月3日导入`（Shoal 与 Tonal 的连接页）；没有配置时为空串。 */
+    val stampShort: String get() = if (present) "$dateShort$verb" else ""
 
-    /** `10-03 导入`（夜航的连接页）。 */
-    val stampNight: String get() = "$dateNight $verb"
+    /** `10-03 导入`（夜航的连接页）；没有配置时为空串。 */
+    val stampNight: String get() = if (present) "$dateNight $verb" else ""
 
-    /** `10月3日 17:29 导入`（配置页）。 */
-    val stampFull: String get() = "$dateTime $verb"
+    /** `10月3日 17:29 导入`（配置页）；没有配置时为空串。 */
+    val stampFull: String get() = if (present) "$dateTime $verb" else ""
 }
 
 /** Tonal 连接页 tailnet 色调卡的两行：大字与小字（画稿 `.tc .v` / `.tc .d`）。 */
@@ -242,14 +242,23 @@ data class HomeUi(
     /** 顶栏刷新按钮：VPN 在跑时可用；[refreshing] 时图标转圈、不能再点（与节点页的「测速中」同一个状态）。 */
     val canRefresh: Boolean,
     val refreshing: Boolean,
-    /** tailnet 行的副文字：「op12-petrel · 100.64.0.20」。 */
+    /** tailnet 行的副文字：「pjd110-petrel · 100.64.0.20」。 */
     val tailnetSub: String,
     val tailnetEnd: TailnetEnd,
     /** Tonal 的 tailnet 色调卡：大字与小字。 */
     val tailnetCard: TailnetCard,
     val config: ConfigSummary,
     val importing: Boolean,
-)
+) {
+    /** 出口延迟的显示：刷新中（与节点页的「测速中」同一个状态）显示「…」并用 Idle 样式，spec §2.7。 */
+    val exitView: DelayView get() = exitDelay.view(refreshing)
+
+    /** 「导入 YAML…」按钮（没有配置时的首页）。 */
+    val importLabel: String get() = importButtonLabel(importing)
+}
+
+/** 导入按钮的文字：校验中「校验中…」，否则「导入 YAML…」。首页与配置页共用。 */
+fun importButtonLabel(busy: Boolean): String = if (busy) "校验中…" else "导入 YAML…"
 
 data class NodeItem(
     val name: String,
@@ -282,7 +291,10 @@ data class NodesUi(
     val testing: Boolean,
     val groups: List<NodeGroup>,
     val baseNodes: List<BaseNode>,
-)
+) {
+    /** 测速按钮：「测速中」/「测延迟」。 */
+    val testLabel: String get() = if (testing) "测速中" else "测延迟"
+}
 
 enum class OsKind { Phone, Mac, Windows, Server }
 
@@ -302,7 +314,8 @@ sealed interface TailnetUi {
     /** VPN 没起。 */
     data object NotActive : TailnetUi
 
-    data class NeedsLogin(val loginURL: String) : TailnetUi {
+    /** [hostname] 是本机在 tailnet 里的节点名，待批准的那一行显示它。 */
+    data class NeedsLogin(val loginURL: String, val hostname: String) : TailnetUi {
         val ready: Boolean get() = loginURL.isNotEmpty()
     }
 
@@ -317,7 +330,13 @@ sealed interface TailnetUi {
         val selfIp: String?,
         val summary: TailnetSummary?,
         val peers: List<PeerUi>?,
-    ) : TailnetUi
+    ) : TailnetUi {
+        /** 顶栏状态标签：「已连接」，否则 tailnet 状态原文。 */
+        val statusLabel: String get() = if (connected) "已连接" else state
+
+        /** 标签的着色档：已连接 Live，其余 Warn。 */
+        val statusTone: StatusTone get() = if (connected) StatusTone.Live else StatusTone.Warn
+    }
 }
 
 /** 「加载时 Petrel 会改写这些」卡片的一行。 */
@@ -340,10 +359,19 @@ data class ConfigUi(
     /** 导入失败时当前配置继续使用。 */
     val stillInUse: Boolean get() = error != null
 
+    /** 「校验通过」标签：界面导入过且这次没失败。失败后改为说明行里的「仍在使用」，两者不同时出现（spec 配置页）。 */
+    val verified: Boolean get() = config.imported && !stillInUse
+
+    /** 「导入 YAML…」按钮。 */
+    val importLabel: String get() = importButtonLabel(importing)
+
+    /** GeoIP「替换…」按钮：校验中「校验中…」。 */
+    val geoButtonLabel: String get() = if (geoBusy) "校验中…" else "替换…"
+
     /** 当前配置卡的说明行：「10月3日 17:29 导入」，失败时接「 · 仍在使用」；没有配置时「还没有配置」。 */
     val timeLine: String
         get() {
-            val time = if (!config.present) "还没有配置" else config.stampFull
+            val time = if (!config.present) NO_CONFIG_TEXT else config.stampFull
             return if (config.present && stillInUse) "$time · 仍在使用" else time
         }
 }
@@ -354,6 +382,7 @@ data class SettingsUi(
     val skins: List<Skin>,
     val tone: UiTone,
     val versionName: String,
+    /** 「配置」行的副标题：当前文件名；没有配置时「还没有配置」。 */
     val configName: String,
 )
 

@@ -43,8 +43,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Text
-import com.robb3n.petrel.TAILNET_HOSTNAME
 import com.robb3n.petrel.UiTone
+import com.robb3n.petrel.ui.model.StatusTone
 import com.robb3n.petrel.ui.model.Band
 import com.robb3n.petrel.ui.model.ConfigUi
 import com.robb3n.petrel.ui.model.ConnStatus
@@ -168,7 +168,7 @@ private fun Hero(ui: HomeUi, a: PetrelActions) {
         when (status) {
             ConnStatus.NeedsLogin -> FilledBtn("去登录 tailnet", a.openTailnet, Modifier.padding(top = 16.dp), icon = Ms4.login)
             ConnStatus.NoConfig -> FilledBtn(
-                if (ui.importing) "校验中…" else "导入 YAML…", a.importConfig, Modifier.padding(top = 16.dp),
+                ui.importLabel, a.importConfig, Modifier.padding(top = 16.dp),
                 icon = Ms4.download, enabled = !ui.importing,
             )
             else -> Unit
@@ -187,7 +187,7 @@ private fun ChainGroup(ui: HomeUi, a: PetrelActions) {
                 HopRole.Tailnet -> Item(pos(i), leading = { Avatar(Ms4.lan) }) { ItemText(hop.name, caption) }
                 HopRole.Front, HopRole.Relay -> Item(pos(i), leading = { Avatar(Ms4.swapHoriz) }) { ItemText(hop.name, caption) }
                 HopRole.Exit -> {
-                    val v = ui.exitDelay.view(testing = false)
+                    val v = ui.exitView
                     Item(
                         pos(i), selected = true, onClick = a.openNodes, role = Role.Button,
                         leading = { Avatar(Ms4.publicFill, primary = true) },
@@ -283,7 +283,7 @@ internal fun TonalNodes(ui: NodesUi, a: PetrelActions) {
         bottom = 96.dp,
         overlay = {
             ExtendedFab(
-                if (ui.testing) "测速中" else "测延迟", Ms4.timer, a.testDelay,
+                ui.testLabel, Ms4.timer, a.testDelay,
                 Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp),
                 enabled = !ui.testing, spin = ui.testing,
             )
@@ -395,7 +395,7 @@ private fun TailnetLogin(ui: TailnetUi.NeedsLogin, a: PetrelActions) {
                 pos(0), minHeight = 64.dp,
                 leading = { Avatar(Ms4.smartphone, bg = c.secC, fg = c.onSecC) },
                 trailing = { Badge("等待批准", Band.Warn, tabular = false) },
-            ) { ItemText(TAILNET_HOSTNAME, "本机", subMono = false) }
+            ) { ItemText(ui.hostname, "本机", subMono = false) }
         }
     }
 }
@@ -416,8 +416,8 @@ private fun TailnetRunning(ui: TailnetUi.Running, a: PetrelActions) {
     ScreenFrame(
         appBar = {
             TonalAppBar("tailnet", end = 16.dp, trailing = {
-                if (ui.connected) StatusChip("已连接", Ms4.checkCircleFill, c.okC, c.onOkC)
-                else StatusChip(ui.state, Ms4.errorFill, c.warnC, c.onWarnC)
+                if (ui.statusTone == StatusTone.Live) StatusChip(ui.statusLabel, Ms4.checkCircleFill, c.okC, c.onOkC)
+                else StatusChip(ui.statusLabel, Ms4.errorFill, c.warnC, c.onWarnC)
             })
         },
         nav = true,
@@ -524,7 +524,7 @@ internal fun TonalConfig(ui: ConfigUi, a: PetrelActions) {
                 pos(0),
                 leading = { Avatar(Ms4.description, bg = c.secC, fg = c.onSecC) },
                 // 只有经界面导入、校验过的配置才有这一标签；push-config.sh 推入的没有元数据
-                trailing = if (cfg.imported) {
+                trailing = if (ui.verified) {
                     { Badge("校验通过", Band.Ok, tabular = false) }
                 } else {
                     null
@@ -532,7 +532,7 @@ internal fun TonalConfig(ui: ConfigUi, a: PetrelActions) {
             ) { ItemText(cfg.name, ui.timeLine) }
         }
         FilledBtn(
-            if (ui.importing) "校验中…" else "导入 YAML…", a.importConfig,
+            ui.importLabel, a.importConfig,
             Modifier.padding(top = 12.dp), icon = Ms4.download, enabled = !ui.importing, fill = true,
         )
         Foot("先校验，通过才替换现有配置；VPN 运行中会自动重启生效。", Modifier.padding(top = 8.dp, bottom = 16.dp))
@@ -540,7 +540,7 @@ internal fun TonalConfig(ui: ConfigUi, a: PetrelActions) {
             Item(
                 pos(0),
                 leading = { Avatar(Ms4.public, bg = c.secC, fg = c.onSecC) },
-                trailing = { OutlineBtn(if (ui.geoBusy) "校验中…" else "替换…", a.replaceGeoIp, enabled = !ui.geoBusy) },
+                trailing = { OutlineBtn(ui.geoButtonLabel, a.replaceGeoIp, enabled = !ui.geoBusy) },
             ) { ItemText("GeoIP 数据库", "Country.mmdb · ${ui.geoText}", mono = false, subColor = if (ui.geoBad) c.err else null) }
         }
         Gap(16.dp)

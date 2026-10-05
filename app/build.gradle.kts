@@ -8,23 +8,28 @@ plugins {
 // 回火任务的 forge 只改下面这一行 baseVersionName，不再手动改 versionCode。
 val baseVersionName = "0.1.0"
 
-fun gitOutput(vararg args: String): String = providers.exec {
-    commandLine("git", *args)
-    workingDir = rootProject.projectDir
-}.standardOutput.asText.get().trim()
+// 没有 git 历史（GitHub 自动生成的源码压缩包）或根本没装 git 时返回 null，版本号退成 <base>-src、build 1，不让构建失败
+fun gitOutput(vararg args: String): String? = runCatching {
+    providers.exec {
+        commandLine("git", *args)
+        workingDir = rootProject.projectDir
+        isIgnoreExitValue = true
+    }.let { r -> if (r.result.get().exitValue == 0) r.standardOutput.asText.get().trim() else null }
+}.getOrNull()
 
 // 2026-10-04 开源前把最初的 12 个提交压成了一个，提交计数从 12 掉回 1；加上这 12，build 号才只增不减（已装的包不会被判成降级）。
 val squashedCommits = 12
-val gitBuild: Int = gitOutput("rev-list", "--count", "HEAD").toInt() + squashedCommits
+val gitCount: Int? = gitOutput("rev-list", "--count", "HEAD")?.toIntOrNull()
+val gitBuild: Int = gitCount?.let { it + squashedCommits } ?: 1
 // HEAD 上有 tag v<baseVersionName> 且已跟踪文件没有未提交改动 = 稳定版；否则开发版 <base>-dev.<build>。
 // 带着改动在打过 tag 的 HEAD 上构建不算稳定版，免得出一个同名的 <base> 包、覆盖侧载存档里的稳定版。未跟踪文件不算改动。
-val trackedTreeClean: Boolean = providers.exec {
+val trackedTreeClean: Boolean = gitCount != null && providers.exec {
     commandLine("git", "diff", "--quiet", "HEAD")
     workingDir = rootProject.projectDir
     isIgnoreExitValue = true
 }.result.get().exitValue == 0
 val isStableBuild: Boolean = trackedTreeClean &&
-    gitOutput("tag", "--points-at", "HEAD").lineSequence().any { it == "v$baseVersionName" }
+    gitOutput("tag", "--points-at", "HEAD").orEmpty().lineSequence().any { it == "v$baseVersionName" }
 
 // 正式 release key（PKCS12）：路径与口令只在构建机 ~/.gradle/gradle.properties 的 petrel.release.*，不进仓库。
 val releaseSigningKeys = listOf("storeFile", "storePassword", "keyAlias", "keyPassword").map { "petrel.release.$it" }
@@ -39,13 +44,18 @@ android {
         minSdk = 29
         targetSdk = 35
         versionCode = gitBuild
-        versionName = if (isStableBuild) baseVersionName else "$baseVersionName-dev.$gitBuild"
+        versionName = when {
+            gitCount == null -> "$baseVersionName-src"
+            isStableBuild -> baseVersionName
+            else -> "$baseVersionName-dev.$gitBuild"
+        }
     }
 
     // 属性缺失时文件末尾的 taskGraph 检查让 release 构建直接失败，绝不退回 debug key。
     signingConfigs {
         create("release") {
-            releaseSigningProp("storeFile")?.let { storeFile = file(it) }
+            // file() 不展开 ~：写成 ~/… 时先换成用户目录
+            releaseSigningProp("storeFile")?.let { storeFile = file(if (it.startsWith("~/")) System.getProperty("user.home") + it.substring(1) else it) }
             storePassword = releaseSigningProp("storePassword")
             keyAlias = releaseSigningProp("keyAlias")
             keyPassword = releaseSigningProp("keyPassword")
@@ -89,7 +99,8 @@ android {
 val coreAar = layout.projectDirectory.file("libs/ptcore.aar")
 val buildCore by tasks.registering(Exec::class) {
     val coreDir = rootProject.layout.projectDirectory.dir("core")
-    inputs.files(fileTree(coreDir) { include("**/*.go", "go.mod", "go.sum", "build.sh") })
+    // 只改 Go 测试不进 AAR，不该触发 gomobile 重编
+    inputs.files(fileTree(coreDir) { include("**/*.go", "go.mod", "go.sum", "build.sh"); exclude("**/*_test.go") })
     outputs.file(coreAar)
     workingDir = coreDir.asFile
     commandLine("bash", "build.sh", coreAar.asFile.absolutePath)

@@ -8,7 +8,6 @@ class App : Application() {
         instance = this
         Notifications.ensureChannel(this)
         GroupsRepository.start()
-        TailnetRepository.start()
     }
 
     companion object {

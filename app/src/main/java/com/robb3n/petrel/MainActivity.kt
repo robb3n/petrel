@@ -14,6 +14,7 @@ import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -55,6 +56,20 @@ class MainActivity : ComponentActivity() {
         ) {
             notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+        // 磁贴冷启动后任务的根是 TileLaunchActivity；从通知等入口叠上来的主界面按返回时，结束自己会让 TileLaunchActivity
+        // 回到前台、又把主界面拉出来，人退不出去。这时把整个任务退到后台（卡片留着，可以上锁）。
+        // 这个回调最先注册、优先级最低：界面里的导航返回栈先处理，没得退了才轮到它。
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (!isTaskRoot) {
+                    moveTaskToBack(true)
+                    return
+                }
+                isEnabled = false
+                onBackPressedDispatcher.onBackPressed()
+                isEnabled = true
+            }
+        })
         // Activity 带 savedInstanceState 重建（进程被杀后点最近任务卡片、后台时切了明暗）时，系统会用原 intent 重放，
         // 而且不带 LAUNCHED_FROM_HISTORY：这时不能再处理 EXTRA_START，否则悄悄打开了人刚关掉的 VPN
         if (savedInstanceState == null) handleStartExtra(intent)
@@ -78,11 +93,7 @@ class MainActivity : ComponentActivity() {
                     onReplaceGeoIp = { pickGeoIp.launch(arrayOf("*/*")) },
                     onToggle = ::toggle,
                     onOpenLogin = ::openLogin,
-                    onCopyLogin = {
-                        // 登录完成后链接会被清空：别把空串写进剪贴板、丢掉人原来的内容
-                        val url = CoreBridge.state.value.loginURL
-                        if (url.isNotEmpty()) copyToClipboard(this, "tailnet login", url, "已复制登录链接")
-                    },
+                    onCopyLogin = { copyLoginUrl(this) },
                 )
             }
         }

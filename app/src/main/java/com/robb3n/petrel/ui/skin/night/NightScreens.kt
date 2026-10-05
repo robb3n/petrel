@@ -46,7 +46,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import com.robb3n.petrel.TAILNET_HOSTNAME
 import com.robb3n.petrel.UiTone
 import com.robb3n.petrel.ui.PetrelIcons
 import com.robb3n.petrel.ui.model.Band
@@ -202,7 +201,7 @@ private fun StatusPanel(ui: HomeUi, a: PetrelActions) {
             }
             if (status == ConnStatus.NoConfig) {
                 SolidBtn(
-                    if (ui.importing) "校验中…" else "导入 YAML…", a.importConfig,
+                    ui.importLabel, a.importConfig,
                     Modifier.fillMaxWidth(), icon = PetrelIcons.Import, enabled = !ui.importing,
                 )
                 Gap(16.dp)
@@ -241,7 +240,7 @@ private fun StatusPanel(ui: HomeUi, a: PetrelActions) {
 @Composable
 private fun Readout(ui: HomeUi, live: Boolean) {
     val c = Night.colors
-    val r = ui.exitDelay.readout
+    val r = ui.exitView.readout
     val color = if (live && r.numeric) c.ok else c.ink3
     Row(Modifier.height(32.7.dp)) {
         // 「超时」是汉字：36 的 Barlow 字号太抢眼，缩到 24（同节点行，画稿没画这个状态）
@@ -304,12 +303,12 @@ private fun LinksPanel(ui: HomeUi, a: PetrelActions) {
 private fun FirstUsePanel() {
     Panel {
         Box(Modifier.padding(start = 16.dp, top = 14.dp, bottom = 12.dp)) { Cap("首次使用", "FIRST RUN") }
-        FIRST_USE_STEPS.forEachIndexed { i, st -> step((i + 1).toString().padStart(2, '0'), st.title, st.desc) }
+        FIRST_USE_STEPS.forEachIndexed { i, st -> Step((i + 1).toString().padStart(2, '0'), st.title, st.desc) }
     }
 }
 
 @Composable
-private fun step(n: String, title: String, sub: String) {
+private fun Step(n: String, title: String, sub: String) {
     HLine()
     LRow(
         title, sub = sub, subMono = false, subWrap = true,
@@ -331,7 +330,7 @@ internal fun NightNodes(ui: NodesUi, a: PetrelActions) {
         topBar = {
             TitleBar("节点", trailing = {
                 OutlineBtn(
-                    if (ui.testing) "测速中" else "测延迟", a.testDelay,
+                    ui.testLabel, a.testDelay,
                     icon = PetrelIcons.Timer, enabled = !ui.testing, spin = ui.testing,
                 )
             })
@@ -503,7 +502,7 @@ private fun TailnetLogin(ui: TailnetUi.NeedsLogin, a: PetrelActions) {
         Gap(10.dp)
         Panel {
             LRow(
-                TAILNET_HOSTNAME, sub = "本机", subMono = false,
+                ui.hostname, sub = "本机", subMono = false,
                 leading = { RowIcon(PetrelIcons.Tailnet) },
                 trailing = { StatusChip("等待批准", ChipTone.Warn) },
             )
@@ -519,7 +518,7 @@ private fun TailnetRunning(ui: TailnetUi.Running, a: PetrelActions) {
     Frame(
         topBar = {
             TitleBar("tailnet", end = 16.dp, trailing = {
-                StatusChip(if (ui.connected) "已连接" else ui.state, if (ui.connected) ChipTone.Ok else ChipTone.Warn)
+                StatusChip(ui.statusLabel, if (ui.statusTone == StatusTone.Live) ChipTone.Ok else ChipTone.Warn)
             })
         },
         dock = true,
@@ -651,7 +650,7 @@ internal fun NightConfig(ui: ConfigUi, a: PetrelActions) {
                 cfg.name, sub = ui.timeLine, subMono = false,
                 leading = { RowIcon(PetrelIcons.ConfigFile) },
                 // 只有经界面导入、校验过的配置才有这一标签；push-config.sh 推入的没有元数据
-                trailing = if (cfg.imported) {
+                trailing = if (ui.verified) {
                     { StatusChip("校验通过", ChipTone.Ok) }
                 } else {
                     null
@@ -659,24 +658,24 @@ internal fun NightConfig(ui: ConfigUi, a: PetrelActions) {
             )
         }
         Gap(10.dp)
-        SolidBtn(if (ui.importing) "校验中…" else "导入 YAML…", a.importConfig, Modifier.fillMaxWidth(), icon = PetrelIcons.Import, enabled = !ui.importing)
+        SolidBtn(ui.importLabel, a.importConfig, Modifier.fillMaxWidth(), icon = PetrelIcons.Import, enabled = !ui.importing)
         Foot("先校验，通过才替换现有配置；VPN 运行中会自动重启生效。", top = 8.dp)
         Gap(12.dp)
         Panel {
             LRow(
                 "GeoIP 数据库", sub = "Country.mmdb · ${ui.geoText}", subColor = if (ui.geoBad) c.err else null,
-                trailing = { OutlineBtn(if (ui.geoBusy) "校验中…" else "替换…", a.replaceGeoIp, enabled = !ui.geoBusy) },
+                trailing = { OutlineBtn(ui.geoButtonLabel, a.replaceGeoIp, enabled = !ui.geoBusy) },
             )
         }
         GHead("加载时 Petrel 会改写这些", en = "REWRITES", top = 14.dp)
         Panel {
-            ui.rewrites.forEachIndexed { i, r -> rewrite(r.key, r.desc, first = i == 0) }
+            ui.rewrites.forEachIndexed { i, r -> Rewrite(r.key, r.desc, first = i == 0) }
         }
     }
 }
 
 @Composable
-private fun rewrite(key: String, desc: String, first: Boolean = false) {
+private fun Rewrite(key: String, desc: String, first: Boolean = false) {
     if (!first) HLine()
     LRow(key, sub = desc, subMono = false, subWrap = true)
 }

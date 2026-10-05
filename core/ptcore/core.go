@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -36,9 +37,6 @@ type Host interface {
 	OnState(json string)
 	Log(level string, msg string)
 }
-
-// tailnetHostname 是本机在 tailnet 里的节点名。
-const tailnetHostname = "op12-petrel"
 
 type state struct {
 	VPN        string   `json:"vpn"`
@@ -79,8 +77,9 @@ var (
 type hostBox struct{ h Host }
 
 // Start 起 tsnet 节点与 mihomo，tunFd 是 VpnService 交来的 TUN fd（所有权转给本包，成功后归 mihomo）。
+// hostname 是本机在 tailnet 里的节点名，由 Android 侧首次注册时生成并持久化（见 docs/lessons/network-change.md「节点名」）。
 // tsnet 立即启动，不等第一条连接；登录 URL 与状态经 Host.OnState 推出。
-func Start(homeDir string, configPath string, tunFd int, h Host) (err error) {
+func Start(homeDir string, configPath string, tunFd int, hostname string, h Host) (err error) {
 	// 与 Stop 串行：停止后立刻再启动时，新的 Start 要等旧的 Stop 收完；两个 Start 也不会同时通过下面的 srv 检查
 	lifecycleMu.Lock()
 	defer lifecycleMu.Unlock()
@@ -110,13 +109,12 @@ func Start(homeDir string, configPath string, tunFd int, h Host) (err error) {
 	defer func() {
 		if err != nil {
 			teardown()
-			mu.Lock()
-			cur.VPN = "stopped"
-			cur.Error = err.Error()
-			mu.Unlock()
-			publish()
+			resetAfterFailure(err)
 		}
 	}()
+	if strings.TrimSpace(hostname) == "" {
+		return errors.New("empty tailnet hostname")
+	}
 
 	envknob.SetNoLogsNoSupport() // 不往 log.tailscale.io 上传日志
 	tsDir := filepath.Join(homeDir, "tsnet")
@@ -134,10 +132,13 @@ func Start(homeDir string, configPath string, tunFd int, h Host) (err error) {
 
 	s := &tsnet.Server{
 		Dir:       tsDir,
-		Hostname:  tailnetHostname,
+		Hostname:  hostname,
 		Ephemeral: false,
 		Logf:      tsnetLogf,
-		UserLogf:  func(format string, args ...any) { logf("info", "tsnet: "+format, args...) },
+		// tsnet 经 UserLogf 打出「… or go to: <登录链接>」，链接只许走 watchTailnet 的 `tailnet login URL:` 那一行
+		UserLogf: func(format string, args ...any) {
+			logf("info", "tsnet: %s", redactLoginURLs(fmt.Sprintf(format, args...)))
+		},
 	}
 	mu.Lock()
 	srv = s
@@ -162,7 +163,8 @@ func Start(homeDir string, configPath string, tunFd int, h Host) (err error) {
 	}
 	injected, warnings, viaMap, err := injectConfig(user, tunFd, socksAddr, socksPass, fallbackSecret)
 	if err != nil {
-		return err
+		// 带上前缀：Kotlin 侧日志只记第一个冒号之前的部分，后面的配置内容（节点名等）只给界面
+		return fmt.Errorf("inject config: %w", err)
 	}
 	mu.Lock()
 	vias = viaMap
@@ -190,6 +192,15 @@ func Start(homeDir string, configPath string, tunFd int, h Host) (err error) {
 	publish()
 	maybeAutoTest()
 	return nil
+}
+
+// resetAfterFailure 在 Start 失败、teardown 之后调用：与 Stop 一样整个复位，只留错误。
+// 半截启动时 tailnet 可能已到 Running 或带着登录链接，不能留给界面。
+func resetAfterFailure(err error) {
+	mu.Lock()
+	cur = state{VPN: "stopped", Tailnet: "Stopped", TailnetIPs: []string{}, Error: err.Error()}
+	mu.Unlock()
+	publish()
 }
 
 // releaseTunFd 在 mihomo 没能接管 TUN 时释放 fd，让 VPN 接口立刻拆掉。
@@ -296,7 +307,7 @@ func teardown() {
 	if c != nil {
 		c()
 	}
-	executor.Shutdown()                 // 关 TUN 等 listener（同时关闭 fd）
+	executor.Shutdown() // 关 TUN 等 listener（同时关闭 fd）
 	// Shutdown 只关监听，不清 mihomo 记着的上一份 TUN 配置。Android 会复用 fd 编号，下次 Start 的配置
 	// （含 file-descriptor）与旧的「相等」时，ReCreateTun 会认为没变而跳过重建，TUN 就成了死的（进程内停止再启动后断网）。
 	listener.LastTunConf = LC.Tun{}
@@ -421,12 +432,21 @@ func watchTailnet(ctx context.Context, s *tsnet.Server) {
 		}
 		changed := false
 		mu.Lock()
+		// teardown 先取消 ctx、之后才复位状态（Stop、Start 失败）：取消之后这一轮不能再写，否则会盖掉复位、
+		// 或把上一次的 tailnet 状态与登录链接写进下一次 Start 的状态。检查与写入同在 mu 下，没有缝
+		if ctx.Err() != nil {
+			mu.Unlock()
+			return
+		}
 		if n.State != nil {
 			cur.Tailnet = n.State.String()
 			changed = true
 			if *n.State == ipn.Running {
 				cur.LoginURL = ""
 				cur.TailnetIPs = ips
+			} else {
+				// 离开 Running（登出、停止）后地址已不属于本机，不能留在界面与通知里
+				cur.TailnetIPs = []string{}
 			}
 		}
 		if n.BrowseToURL != nil && *n.BrowseToURL != "" {
@@ -492,7 +512,16 @@ func tsnetLogf(format string, args ...any) {
 	if strings.Contains(msg, "[v1]") || strings.Contains(msg, "[v2]") {
 		return
 	}
-	logf("debug", "tsnet: %s", msg)
+	// 控制面客户端会打「AuthURL is <登录链接>」
+	logf("debug", "tsnet: %s", redactLoginURLs(msg))
+}
+
+// loginURLPattern 匹配 tailnet 的交互登录链接（控制面的 /a/<token> 路径），含官方与自建控制面。
+var loginURLPattern = regexp.MustCompile(`https?://\S+/a/\S+`)
+
+// redactLoginURLs 把 tsnet 日志里的登录链接换成占位：完整链接只许出现在 `tailnet login URL:` 那一行。
+func redactLoginURLs(msg string) string {
+	return loginURLPattern.ReplaceAllString(msg, "<login URL>")
 }
 
 func logf(level string, format string, args ...any) {

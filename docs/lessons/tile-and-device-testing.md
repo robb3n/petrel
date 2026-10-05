@@ -52,10 +52,17 @@ tsnet 第一次启动时会打出登录链接（logcat 里的 `tailnet login URL
   - 修法：磁贴的 intent 加 `CLEAR_TOP | SINGLE_TOP`。栈里还有 `TileLaunchActivity` 时，清掉它上面的界面并投递 `onNewIntent`；栈里没有时，在任务顶上新建一个，走 `onCreate`。旧实例会同时收到 `onNewIntent` 和 `onRestart`，两者先后不固定，所以只做标记，到 `onResume` 再决定：收到过 `onNewIntent` 就起服务，否则切到主界面。
 - **修过的 bug：在主界面按返回键退出后，任务里没有 Activity 了，卡片却还在，这时点卡片只会闪回桌面。** 原因：系统用任务的 base intent 重建 `TileLaunchActivity`，又走了一遍起服务加退后台。从最近任务重建的 intent 带 `FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY`，`onCreate` 看到它就直接切到主界面。
 - 修完后在真机和 a35 上各跑了 12 个场景，结果都正确：冷启动；栈里只有 Tile、只有 Main、主界面在前台、任务为空这几种情况下的磁贴停止再启动；点卡片；点桌面图标；按返回键。每一步都核对 VPN、前台服务、焦点窗口和任务栈。
+- **修过的 bug：从通知进主界面后按返回，退不出去。** 磁贴冷启动后任务是 `[TileLaunch]`，点「已连接」通知把 `MainActivity` 叠上去成 `[TileLaunch, Main]`。按返回结束 Main 后，`TileLaunchActivity` 走 `onRestart` → `onResume`，又切回主界面。12 个场景里没有「从通知进入」。修法：`MainActivity` 不是任务根时，返回键把整个任务退到后台（`moveTaskToBack(true)`），不结束自己；这个回调最先注册，界面里的导航返回栈先处理。
+- 2026-10-05 复测（一加 12，v0.1.0 回火的工作树）：force-stop 后展开面板点磁贴，1 秒内服务起来，桌面不出界面，任务栈 `[TileLaunch]`，最近任务有卡片。点通知后是 `[TileLaunch, Main]`、主界面在前台；按返回回到桌面，4 秒后仍在桌面，卡片还在。点桌面图标回到主界面，再按返回也回桌面。任务还在时用磁贴先停再开，各 1 秒内生效。a35 上同样走通，那边还验过主界面是任务根时，按返回同样回到桌面。
+- `click-tile` 紧跟在 `input keyevent HOME` 后面（相隔不到 100 ms）时，回桌面的转场还没结束，系统会中止这次启动：日志是 `Abort TransitionRecord … of invisible launch ActivityRecord{… TileLaunchActivity}`，Activity 只留下一条没绑进程的记录（`app=null`），VPN 不起来。等几秒、先 `expand-settings` 再点就正常。真人不会这么快，这是脚本的时序问题，不是 App 的 bug。
 
 ### 被官方 Tailscale 顶掉（真机）
 
 打开官方 App 连接（它的磁贴点了没反应：进程被 ColorOS 冻结）：两边之前都授权过，所以没有弹框，Tailscale 直接接管 tun0。Petrel 这边服务停止、通知撤掉、磁贴显示「关闭」，没有自动重连。断开并 force-stop Tailscale 之后，在 Petrel 主界面点「连接」不需要重新授权就能起来。
+
+2026-10-05 复测：Tailscale 在 App 里把开关关掉再打开，就会接管 VPN，Petrel 记 `vpn revoked by system`，状态整个复位（`tailnet` 为 `Stopped`、`tailnetIPs` 为空）。这时 Tailscale 还连着，直接点 Petrel 的磁贴，走的是 `TileLaunchActivity` 起服务，不走授权分支：Android 16 上授权过一次的 App 被顶掉后，`VpnService.prepare()` 仍返回 null（预授权记在 appops 的 `ACTIVATE_VPN` 里）。Petrel 于是直接把 VPN 抢回来，Tailscale 被顶掉。所以「被顶掉 → 点磁贴 → 授权弹框」这条路，只在从没授权过、或在系统设置里撤销了授权时才会走到。
+
+磁贴的授权分支与通知、系统 VPN 设置入口各用各的 requestCode（`RequestCodes`）。PendingIntent 只按组件、action、data 和 requestCode 区分记录，extras 不参与比较。以前三处都是 0，磁贴那条带着 `EXTRA_START` 又用了 `FLAG_UPDATE_CURRENT`，会把这个 extra 写进通知与系统设置入口共用的那条记录，之后点它们就可能悄悄起 VPN。a35 上撤销授权（`appops set … ACTIVATE_VPN ignore`）后点磁贴，`dumpsys activity intents` 里授权入口是单独一条（requestCode 2，`(has extras)`），通知（0）和系统设置入口（1）都没有 extras；取消弹框后日志是 `VPN 授权被拒绝`，VPN 保持关闭。真机上没有撤销授权去复测：adb 撤销后只能人亲手点弹框才能恢复。
 
 锁屏下的坑：
 - 真机息屏加密码锁屏时 `cmd statusbar click-tile` 只会走到 `tile: launching TileLaunchActivity`，Activity 没起来，VPN 不会启动（`startActivityAndCollapse` 被锁屏挡住）。这是 `click-tile` 的模拟点击；真人在锁屏上点磁贴，系统会先要求解锁。直接 `startForegroundService` 的旧路径在锁屏下是否更宽松，没有对比测过。真机测试前先解锁并保持亮屏。

@@ -1,11 +1,6 @@
 package com.robb3n.petrel.ui.skin.tonal
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,9 +21,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,7 +32,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
@@ -50,6 +43,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.robb3n.petrel.ui.spinning
 import com.robb3n.petrel.ui.longPressOnly
 import com.robb3n.petrel.ui.model.Band
 import com.robb3n.petrel.ui.model.breakAfterHyphens
@@ -118,13 +112,6 @@ fun IconBtn(
     spin: Boolean = false,
 ) {
     val c = Tonal.colors
-    // 匀速旋转 .9s/圈；只在 [spin] 时才起动画
-    val angle: State<Float>? = if (spin) {
-        rememberInfiniteTransition(label = "iconSpin")
-            .animateFloat(0f, 360f, infiniteRepeatable(tween(900, easing = LinearEasing)), label = "angle")
-    } else {
-        null
-    }
     Box(
         modifier
             .size(48.dp)
@@ -135,7 +122,7 @@ fun IconBtn(
         Icon(
             icon, description,
             tint = (tint ?: c.onV).let { if (enabled || spin) it else it.copy(alpha = 0.38f) },
-            modifier = Modifier.size(24.dp).graphicsLayer { rotationZ = angle?.value ?: 0f },
+            modifier = Modifier.size(24.dp).spinning(spin),
         )
     }
 }
@@ -391,12 +378,6 @@ fun OutlineBtn(
 fun ExtendedFab(text: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, spin: Boolean = false) {
     val c = Tonal.colors
     val shape = RoundedCornerShape(16.dp)
-    val rotation = if (spin) {
-        rememberInfiniteTransition(label = "fabSpin")
-            .animateFloat(0f, 360f, infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Restart), label = "fabRot")
-    } else {
-        null
-    }
     Row(
         modifier
             .shadow(6.dp, shape)
@@ -410,7 +391,7 @@ fun ExtendedFab(text: String, icon: ImageVector, onClick: () -> Unit, modifier: 
     ) {
         Icon(
             icon, null, tint = c.onPriC,
-            modifier = Modifier.size(24.dp).graphicsLayer { rotationZ = rotation?.value ?: 0f },
+            modifier = Modifier.size(24.dp).spinning(spin),
         )
         CssText(text, tui(16f, FontWeight.Medium, 22.4f), c.onPriC, softWrap = false)
     }

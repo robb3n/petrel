@@ -11,6 +11,13 @@ import org.json.JSONObject
 const val TAG = "Petrel"
 private val LOGIN_URL_VALUE = Regex("\"loginURL\":\"[^\"]+\"")
 
+/** 错误文本可能是 mihomo 的配置解析错误，带着配置行与凭据：日志里只记「有错误」。JSON 字符串里的转义引号也要跨过去。 */
+private val ERROR_VALUE = Regex("\"error\":\"(?:[^\"\\\\]|\\\\.)+\"")
+
+/** 状态 JSON 的日志形态：登录链接与错误文本都换成 `<set>`。 */
+internal fun redactStateJson(json: String): String =
+    json.replace(LOGIN_URL_VALUE, "\"loginURL\":\"<set>\"").replace(ERROR_VALUE, "\"error\":\"<set>\"")
+
 /** Go 内核推来的状态，形状见 core/ptcore/core.go 的 state。 */
 data class CoreState(
     val vpn: String,
@@ -45,7 +52,8 @@ data class CoreState(
                 groupsRev = o.optInt("groupsRev"),
             )
         }.getOrElse {
-            Log.w(TAG, "bad state json: $json", it)
+            // 不记原文与异常信息：里面有完整登录链接，JSONException 的信息也会引用原文
+            Log.w(TAG, "bad state json: ${it.javaClass.simpleName}")
             STOPPED
         }
     }
@@ -57,7 +65,7 @@ object CoreBridge : Host {
     val state: StateFlow<CoreState> = _state
 
     override fun onState(json: String) {
-        Log.i(TAG, "state ${json.replace(LOGIN_URL_VALUE, "\"loginURL\":\"<set>\"")}") // 登录链接不进日志
+        Log.i(TAG, "state ${redactStateJson(json)}") // 登录链接与错误文本不进日志
         set(CoreState.parse(json))
     }
 
@@ -70,9 +78,12 @@ object CoreBridge : Host {
         }
     }
 
-    /** Kotlin 侧在进 Go 之前就失败时（没配置、没授权）用它报错。 */
-    fun fail(message: String) {
-        Log.e(TAG, message)
+    /**
+     * Kotlin 侧在进 Go 之前就失败、或 Go 的 Start 抛错时用它报错。[message] 完整显示给人；
+     * [logLine] 进日志，带了异常信息（可能含配置内容）时调用方要给一个不含它的版本。
+     */
+    fun fail(message: String, logLine: String = message) {
+        Log.e(TAG, logLine)
         set(CoreState.STOPPED.copy(error = message))
     }
 
@@ -80,6 +91,7 @@ object CoreBridge : Host {
 
     private fun set(s: CoreState) {
         _state.value = s
+        TailnetRepository.onState(s)
         App.instance?.let { ctx ->
             TileService.requestListeningState(ctx, ComponentName(ctx, PetrelTileService::class.java))
         }

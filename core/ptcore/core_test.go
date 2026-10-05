@@ -1,7 +1,10 @@
 package ptcore
 
 import (
+	"errors"
 	"os"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,7 +13,7 @@ import (
 
 type recHost struct{ logs chan string }
 
-func (r *recHost) OnState(string)        {}
+func (r *recHost) OnState(string)         {}
 func (r *recHost) Log(_ string, m string) { r.logs <- m }
 
 // tailscale 会在持有内部锁时回调 Logf；Logf 若去拿 mu，而另一路持有 mu 去调 tsnet，就会互相卡死
@@ -108,3 +111,61 @@ func TestReleaseTunFdLeavesNonTunAlone(t *testing.T) {
 		t.Errorf("a non-tun fd must not be touched: %v", err)
 	}
 }
+
+func TestTsnetLogfRedactsLoginURL(t *testing.T) {
+	h := &recHost{logs: make(chan string, 4)}
+	host.Store(&hostBox{h})
+	defer host.Store(nil)
+
+	tsnetLogf("AuthURL is %v", "https://login.tailscale.com/a/1a2b3c4d5e6f")
+	tsnetLogf("To start this tsnet server, restart with TS_AUTHKEY set, or go to: %s", "https://hs.example.com:8443/a/abcdef")
+	for _, want := range []string{
+		"tsnet: AuthURL is <login URL>",
+		"tsnet: To start this tsnet server, restart with TS_AUTHKEY set, or go to: <login URL>",
+	} {
+		if got := <-h.logs; got != want {
+			t.Errorf("log = %q, want %q", got, want)
+		}
+	}
+	// 不是登录链接的地址照常保留
+	if got := redactLoginURLs("derp: https://derp1.tailscale.com/derp"); got != "derp: https://derp1.tailscale.com/derp" {
+		t.Errorf("non-login URL changed: %q", got)
+	}
+}
+
+// Start 失败时整个状态复位、只留错误：半截启动时 tailnet 已到 Running、带着登录链接与出口，都不能留下。
+func TestResetAfterFailureClearsHalfStartedState(t *testing.T) {
+	var published []string
+	host.Store(&hostBox{&stateHost{onState: func(js string) { published = append(published, js) }}})
+	defer host.Store(nil)
+	mu.Lock()
+	cur = state{VPN: "starting", Tailnet: "Running", TailnetIPs: []string{"100.64.0.1"}, LoginURL: "https://x/a/y", Exit: "front", GroupsRev: 3}
+	mu.Unlock()
+
+	resetAfterFailure(errors.New("parse config: boom"))
+
+	mu.Lock()
+	got := cur
+	mu.Unlock()
+	want := state{VPN: "stopped", Tailnet: "Stopped", TailnetIPs: []string{}, Error: "parse config: boom"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("state after failure = %+v, want %+v", got, want)
+	}
+	if len(published) != 1 {
+		t.Fatalf("published %d states, want 1", len(published))
+	}
+}
+
+// 空节点名直接让 Start 失败，不去起 tsnet。
+func TestStartRejectsEmptyHostname(t *testing.T) {
+	err := Start(t.TempDir(), "/nonexistent", -1, "  ", &stateHost{onState: func(string) {}})
+	host.Store(nil)
+	if err == nil || !strings.Contains(err.Error(), "hostname") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+type stateHost struct{ onState func(string) }
+
+func (s *stateHost) OnState(js string)  { s.onState(js) }
+func (s *stateHost) Log(string, string) {}

@@ -8,7 +8,6 @@ import com.robb3n.petrel.PeerPath
 import com.robb3n.petrel.ProxyGroupUi
 import com.robb3n.petrel.ProxyUi
 import com.robb3n.petrel.Skin
-import com.robb3n.petrel.TAILNET_HOSTNAME
 import com.robb3n.petrel.TAILNET_NEEDS_LOGIN
 import com.robb3n.petrel.TAILNET_RUNNING
 import com.robb3n.petrel.TailnetPeerUi
@@ -119,16 +118,16 @@ fun configSummary(info: ConfigInfo, zone: TimeZone = TimeZone.getDefault()): Con
     dateNight = if (info.present) format("MM-dd", info.timeMillis, zone) else "",
 )
 
-/** 连接页 tailnet 行：[sub] 是完整副文字（「op12-petrel · 100.64.0.20」），[detail] 是去掉本机名前缀的部分（Tonal 的色调卡小字）。 */
+/** 连接页 tailnet 行：[sub] 是完整副文字（「pjd110-petrel · 100.64.0.20」），[detail] 是去掉本机名前缀的部分（Tonal 的色调卡小字）。 */
 internal data class TailnetRow(val sub: String, val detail: String, val end: TailnetEnd)
 
-/** 连接页 tailnet 行的副文字与右侧值，见 spec §2.7「tailnet 摘要」。 */
-internal fun tailnetRow(status: ConnStatus, summary: TailnetSummary?, selfIp: String?): TailnetRow {
-    fun withHost(ip: String?) = if (ip != null) TailnetRow("$TAILNET_HOSTNAME · $ip", ip, TailnetEnd.None) else TailnetRow(TAILNET_HOSTNAME, TAILNET_HOSTNAME, TailnetEnd.None)
+/** 连接页 tailnet 行的副文字与右侧值，见 spec §2.7「tailnet 摘要」。[hostname] 是本机在 tailnet 里的节点名。 */
+internal fun tailnetRow(status: ConnStatus, summary: TailnetSummary?, selfIp: String?, hostname: String): TailnetRow {
+    fun withHost(ip: String?) = if (ip != null) TailnetRow("$hostname · $ip", ip, TailnetEnd.None) else TailnetRow(hostname, hostname, TailnetEnd.None)
     return when (status) {
         ConnStatus.Connected ->
-            withHost(summary?.ip ?: selfIp).copy(end = summary?.let { TailnetEnd.Online(it.online, it.total) } ?: TailnetEnd.None)
-        ConnStatus.NeedsLogin -> TailnetRow("$TAILNET_HOSTNAME · 等待批准", "等待批准", TailnetEnd.NeedsLogin)
+            withHost(summary?.ip ?: selfIp).copy(end = summary?.let { TailnetEnd.Online(it) } ?: TailnetEnd.None)
+        ConnStatus.NeedsLogin -> TailnetRow("$hostname · 等待批准", "等待批准", TailnetEnd.NeedsLogin)
         is ConnStatus.TailnetOther -> withHost(summary?.ip ?: selfIp).copy(end = TailnetEnd.Other(status.state))
         ConnStatus.Connecting -> TailnetRow("正在启动", "正在启动", TailnetEnd.None)
         ConnStatus.Off, ConnStatus.NoConfig -> TailnetRow("未启动", "未启动", TailnetEnd.None)
@@ -163,7 +162,8 @@ val PETREL_REWRITES: List<RewriteItem> = listOf(
     RewriteItem("ts", "注入的 tailnet 节点，用 dialer-proxy: ts 引用"),
     RewriteItem("tun", "接管为 Petrel 的 VPN，固定 gvisor"),
     RewriteItem("external-controller", "固定 127.0.0.1:9090，没写 secret 时随机生成；其余 controller 入口一律删除"),
-    RewriteItem("interface-name · routing-mark", "删除（桌面端残留）"),
+    RewriteItem("interface-name · routing-mark", "删除（桌面端残留），顶层与节点上的都删"),
+    RewriteItem("listeners · tunnels", "入站保留，监听地址改成 127.0.0.1，只本机可连"),
     RewriteItem("petrel-via", "节点上的中转标注，只用于显示链路；读出后删掉，不交给内核"),
 )
 
@@ -186,6 +186,7 @@ fun buildHome(
     import: ImportUi,
     groups: List<ProxyGroupUi>,
     tailnet: TailnetStatusUi?,
+    hostname: String,
     testing: Boolean = false,
     zone: TimeZone = TimeZone.getDefault(),
 ): HomeUi {
@@ -196,7 +197,7 @@ fun buildHome(
     val exit = chain.lastOrNull()?.let { hop -> first?.proxies?.firstOrNull { it.name == hop.name } }
     val exitDelay = if (status == ConnStatus.NeedsLogin || exit == null) Delay.UNKNOWN else Delay(exit.delay)
     val summary = if (s.running && s.tailnet == TAILNET_RUNNING && tailnet != null) tailnetSummary(s, tailnet) else null
-    val row = tailnetRow(status, summary, s.tailnetIPs.firstIPv4())
+    val row = tailnetRow(status, summary, s.tailnetIPs.firstIPv4(), hostname)
     return HomeUi(
         status = status,
         error = s.error,
@@ -254,9 +255,9 @@ fun buildNodes(s: CoreState, groups: List<ProxyGroupUi>, testing: Boolean): Node
     },
 )
 
-fun buildTailnet(s: CoreState, status: TailnetStatusUi?): TailnetUi = when {
+fun buildTailnet(s: CoreState, status: TailnetStatusUi?, hostname: String): TailnetUi = when {
     !s.active -> TailnetUi.NotActive
-    s.tailnet == TAILNET_NEEDS_LOGIN -> TailnetUi.NeedsLogin(s.loginURL)
+    s.tailnet == TAILNET_NEEDS_LOGIN -> TailnetUi.NeedsLogin(s.loginURL, hostname)
     else -> TailnetUi.Running(
         state = s.tailnet,
         connected = s.tailnet == TAILNET_RUNNING,
@@ -276,4 +277,7 @@ fun buildConfig(
 ): ConfigUi = ConfigUi(configSummary(info, zone), import.busy, import.error, geoText(geo), geo == GeoIpStatus.Corrupt, geoBusy)
 
 fun buildSettings(skin: Skin, skins: List<Skin>, tone: UiTone, versionName: String, info: ConfigInfo): SettingsUi =
-    SettingsUi(skin, skins, tone, versionName, info.name)
+    SettingsUi(skin, skins, tone, versionName, if (info.present) info.name else NO_CONFIG_TEXT)
+
+/** 没有配置时的说明：设置页「配置」行的副标题、配置页的说明行。 */
+internal const val NO_CONFIG_TEXT = "还没有配置"

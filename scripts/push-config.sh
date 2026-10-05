@@ -38,7 +38,8 @@ S="$SERIAL"
 "\$A" -s "\$S" shell "run-as $PKG mkdir -p files/mihomo" </dev/null
 "\$A" -s "\$S" shell "run-as $PKG sh -c 'cat > files/config.yaml'" < "$RUN/config.yaml"
 if [ -f "$RUN/Country.mmdb" ]; then
-  "\$A" -s "\$S" shell "run-as $PKG sh -c 'cat > files/mihomo/Country.mmdb'" < "$RUN/Country.mmdb"
+  # 先写临时文件再改名：VPN 运行时 mihomo 映射着旧文件，原地截断会让它读到截断区时 SIGBUS
+  "\$A" -s "\$S" shell "run-as $PKG sh -c 'cat > files/mihomo/Country.mmdb.tmp && mv -f files/mihomo/Country.mmdb.tmp files/mihomo/Country.mmdb'" < "$RUN/Country.mmdb"
 fi
 "\$A" -s "\$S" shell "run-as $PKG chmod 600 files/config.yaml" </dev/null
 "\$A" -s "\$S" shell "run-as $PKG rm -f files/config.meta.json" </dev/null

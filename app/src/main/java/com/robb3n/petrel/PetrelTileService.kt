@@ -47,7 +47,7 @@ class PetrelTileService : TileService() {
         }
         if (VpnService.prepare(this) != null) {
             Log.i(TAG, "tile: vpn not prepared, opening app for consent")
-            launch(Intent(this, MainActivity::class.java).putExtra(MainActivity.EXTRA_START, true))
+            launch(Intent(this, MainActivity::class.java).putExtra(MainActivity.EXTRA_START, true), RequestCodes.TILE_CONSENT)
             return
         }
         Log.i(TAG, "tile: launching TileLaunchActivity")
@@ -55,15 +55,16 @@ class PetrelTileService : TileService() {
         // CLEAR_TOP + SINGLE_TOP：栈里有 TileLaunchActivity 就清掉它上面的界面并投递 onNewIntent，没有就在任务顶上新建。
         launch(
             Intent(this, TileLaunchActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            RequestCodes.TILE_LAUNCH,
         )
     }
 
-    private fun launch(intent: Intent) {
+    private fun launch(intent: Intent, requestCode: Int) {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (Build.VERSION.SDK_INT >= 34) {
             startActivityAndCollapse(
-                PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+                PendingIntent.getActivity(this, requestCode, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             )
         } else {
             @Suppress("DEPRECATION", "StartActivityAndCollapseDeprecated")

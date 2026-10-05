@@ -7,6 +7,18 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 
+/**
+ * 指向同一个组件的 PendingIntent 只按 intent 的 action / data / 组件 + requestCode 区分，extras 不算：
+ * 撞键时 FLAG_UPDATE_CURRENT 会把一处的 extras 写进另一处（磁贴的 EXTRA_START 曾因此让点通知悄悄起 VPN）。
+ * 所以每个入口各用一个 requestCode。
+ */
+object RequestCodes {
+    const val NOTIFICATION_OPEN = 0
+    const val VPN_CONFIGURE = 1
+    const val TILE_CONSENT = 2
+    const val TILE_LAUNCH = 3
+}
+
 object Notifications {
     const val ID = 1
     private const val CHANNEL = "connection"
@@ -20,7 +32,7 @@ object Notifications {
 
     fun build(ctx: Context, s: CoreState): Notification {
         val open = PendingIntent.getActivity(
-            ctx, 0, Intent(ctx, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE,
+            ctx, RequestCodes.NOTIFICATION_OPEN, Intent(ctx, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE,
         )
         val b = Notification.Builder(ctx, CHANNEL)
             .setSmallIcon(R.drawable.ic_tile)

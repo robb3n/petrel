@@ -91,6 +91,9 @@ func injectConfig(user []byte, tunFd int, socksAddr string, socksPass string, fa
 	if dns, ok := cfg["dns"].(map[string]any); ok {
 		delete(dns, "listen")
 	}
+	// listeners / tunnels 的入站不受 allow-lan 约束、默认监听 0.0.0.0：桌面派生配置里的入站会把代理开放给同一局域网。
+	// 入站保留，监听地址一律改成 127.0.0.1，只本机可连。
+	warnings = append(warnings, loopbackInbounds(cfg)...)
 
 	tsProxy := map[string]any{
 		"name":     tsProxyName,
@@ -122,7 +125,9 @@ func injectConfig(user []byte, tunFd int, socksAddr string, socksPass string, fa
 		if !ok {
 			continue
 		}
+		// 节点级的网卡绑定与 routing-mark 同顶层一样是桌面端设置：安卓上 SO_MARK 需要 CAP_NET_ADMIN，带着它每次拨号都 EPERM
 		delete(m, "interface-name")
+		delete(m, "routing-mark")
 		if m["name"] == tsProxyName {
 			warnings = append(warnings, fmt.Sprintf("config already has a proxy named %q; replaced by the built-in tailnet node", tsProxyName))
 			proxies[i] = tsProxy
@@ -139,6 +144,59 @@ func injectConfig(user []byte, tunFd int, socksAddr string, socksPass string, fa
 		return nil, nil, nil, fmt.Errorf("marshal config: %w", err)
 	}
 	return out, warnings, vias, nil
+}
+
+// loopbackHost 是入站被改写后的监听地址。
+const loopbackHost = "127.0.0.1"
+
+// loopbackInbounds 把 listeners 每项的 listen 与 tunnels 每项的本地地址改成 127.0.0.1，返回每处改写的警告。
+// tunnels 有两种写法：字符串 "tcp/udp,<本地地址>,<目标>,<代理>"，或带 address 字段的 map。格式认不出的条目原样留给 mihomo 报错。
+func loopbackInbounds(cfg map[string]any) []string {
+	var warnings []string
+	if list, ok := cfg["listeners"].([]any); ok {
+		for i, l := range list {
+			m, ok := l.(map[string]any)
+			if !ok {
+				continue
+			}
+			if v, _ := m["listen"].(string); v != loopbackHost {
+				m["listen"] = loopbackHost
+				warnings = append(warnings, fmt.Sprintf("listener %d: listen set to %s", i, loopbackHost))
+			}
+		}
+	}
+	if list, ok := cfg["tunnels"].([]any); ok {
+		for i, t := range list {
+			switch v := t.(type) {
+			case string:
+				parts := strings.Split(v, ",")
+				if len(parts) < 2 {
+					continue
+				}
+				if addr, changed := loopbackAddr(strings.TrimSpace(parts[1])); changed {
+					parts[1] = addr
+					list[i] = strings.Join(parts, ",")
+					warnings = append(warnings, fmt.Sprintf("tunnel %d: local address set to %s", i, addr))
+				}
+			case map[string]any:
+				a, _ := v["address"].(string)
+				if addr, changed := loopbackAddr(a); changed {
+					v["address"] = addr
+					warnings = append(warnings, fmt.Sprintf("tunnel %d: local address set to %s", i, addr))
+				}
+			}
+		}
+	}
+	return warnings
+}
+
+// loopbackAddr 把 host:port 的 host 换成 127.0.0.1；解析不了的原样返回、不算改写。
+func loopbackAddr(addr string) (string, bool) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil || host == loopbackHost {
+		return addr, false
+	}
+	return net.JoinHostPort(loopbackHost, port), true
 }
 
 // groupNamesIn 返回配置里 proxy-groups 的组名（格式不对的条目跳过，交给 mihomo 报错）。

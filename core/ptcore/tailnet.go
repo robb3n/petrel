@@ -77,14 +77,14 @@ func peerPath(p *ipnstate.PeerStatus) (path, relay string) {
 }
 
 // buildTailnetStatus 把 tsnet 的 Status 转成界面用的形状；没有 Self（还没登录）时返回 false。
-// 纯函数，不碰锁与 tsnet。
-func buildTailnetStatus(st *ipnstate.Status) (tailnetStatus, bool) {
+// hostname 是本机在 tailnet 里的节点名，Self 没带名字时用它。纯函数，不碰锁与 tsnet。
+func buildTailnetStatus(st *ipnstate.Status, hostname string) (tailnetStatus, bool) {
 	if st == nil || st.Self == nil {
 		return tailnetStatus{}, false
 	}
 	self := tailnetSelf{Name: peerName(st.Self), IPs: addrStrings(st.Self)}
 	if self.Name == "" {
-		self.Name = tailnetHostname
+		self.Name = hostname
 	}
 	if len(self.IPs) == 0 {
 		for _, ip := range st.TailscaleIPs {
@@ -142,7 +142,7 @@ func TailnetStatus() string {
 		logf("warn", "tailnet status: %v", err)
 		return "{}"
 	}
-	out, ok := buildTailnetStatus(st)
+	out, ok := buildTailnetStatus(st, s.Hostname)
 	if !ok {
 		return "{}"
 	}

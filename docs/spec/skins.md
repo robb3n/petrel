@@ -202,7 +202,7 @@
 | 节点页未运行 | 现有 `NodesScreen` | 居中一行「连接后才能查看和切换节点」，不显示「测延迟」 |
 | tailnet「VPN 未连接」 | 现有 `TailnetScreen.NotConnected` | 「VPN 未连接」+「连接后显示 tailnet 状态」 |
 | tailnet 待登录 | v1 `TailnetLogin` | 标题「需要登录 tailnet」（留意色）、说明、登录链接框（等宽；没拿到时「正在获取登录链接…」）、提示段、两个等宽按钮「复制链接」（主）/「浏览器打开」（次），链接没到时都禁用 |
-| 配置 / 导入失败 | v1 `Config`、`ConfigError` | 左上返回；当前配置卡（文件名、`M月d日 HH:mm 导入|更新`、校验通过 / 仍在使用）；主按钮「导入 YAML…」与说明行；GeoIP 卡（`Country.mmdb · 已就绪|文件损坏|—`、「替换…」/「校验中…」）；「加载时 Petrel 会改写这些」卡（四行：`ts`、`tun`、`external-controller`、`interface-name · routing-mark`；`external-controller` 一行写明「固定 127.0.0.1:9090，没写 secret 时随机生成；其余 controller 入口一律删除」，文案在 `ui/model` 的 `PETREL_REWRITES`）；失败横幅在最上面 |
+| 配置 / 导入失败 | v1 `Config`、`ConfigError` | 左上返回；当前配置卡（文件名、`M月d日 HH:mm 导入|更新`、校验通过 / 仍在使用）；主按钮「导入 YAML…」与说明行；GeoIP 卡（`Country.mmdb · 已就绪|文件损坏|—`、「替换…」/「校验中…」）；「加载时 Petrel 会改写这些」卡（各行：`ts`、`tun`、`external-controller`、`interface-name · routing-mark`（顶层与节点上的都删）、`listeners · tunnels`（监听地址改成 127.0.0.1）、`petrel-via`；`external-controller` 一行写明「固定 127.0.0.1:9090，没写 secret 时随机生成；其余 controller 入口一律删除」，文案在 `ui/model` 的 `PETREL_REWRITES`）；失败横幅在最上面 |
 | 设置（新增） | 无 | 左上返回，标题「设置」。三组：**外观**（「皮肤」分段，只列已实现的皮肤，见 §2.1；「明暗」分段：跟随系统 / 浅 / 深）；**配置**（一行，副标题是当前文件名，进配置页）；**关于**（「版本」`v` + `BuildConfig.VERSION_NAME`；「开源许可」打开对话框，列出打包的字体、图标、mihomo、tailscale 及各自许可证）。Shoal 的组织方式参照 Mu3ic mockup v2 的 ⑤ 设置屏与 Mu3ic `SettingsScreen.kt` 的「外观」浮岛（浮岛 + `.lbl` + `.seg`） |
 | 对话框 | v1 | 登出确认、开源许可：`AlertDialog`，颜色取该皮肤的 colorScheme 映射 |
 

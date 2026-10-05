@@ -80,7 +80,7 @@ func TestBuildTailnetStatus(t *testing.T) {
 			key.NewNode().Public(): {DNSName: "viaa.t.ts.net.", TailscaleIPs: ips("100.64.0.31"), Online: true, PeerRelay: "3.3.3.3:3:1"},
 		},
 	}
-	got, ok := buildTailnetStatus(st)
+	got, ok := buildTailnetStatus(st, "pjd110-petrel")
 	if !ok {
 		t.Fatal("expected ok")
 	}
@@ -123,24 +123,24 @@ func TestBuildTailnetStatus(t *testing.T) {
 }
 
 func TestBuildTailnetStatusNoSelf(t *testing.T) {
-	if _, ok := buildTailnetStatus(nil); ok {
+	if _, ok := buildTailnetStatus(nil, "pjd110-petrel"); ok {
 		t.Error("nil status should not be ok")
 	}
-	if _, ok := buildTailnetStatus(&ipnstate.Status{}); ok {
+	if _, ok := buildTailnetStatus(&ipnstate.Status{}, "pjd110-petrel"); ok {
 		t.Error("status without Self should not be ok")
 	}
 }
 
 func TestBuildTailnetStatusSelfFallbacks(t *testing.T) {
 	st := &ipnstate.Status{TailscaleIPs: ips("100.64.0.20"), Self: &ipnstate.PeerStatus{}}
-	got, _ := buildTailnetStatus(st)
-	if got.Self.Name != tailnetHostname || !reflect.DeepEqual(got.Self.IPs, []string{"100.64.0.20"}) {
+	got, _ := buildTailnetStatus(st, "pjd110-petrel")
+	if got.Self.Name != "pjd110-petrel" || !reflect.DeepEqual(got.Self.IPs, []string{"100.64.0.20"}) {
 		t.Fatalf("self = %+v", got.Self)
 	}
 }
 
 func TestTailnetStatusJSONShape(t *testing.T) {
-	got, _ := buildTailnetStatus(&ipnstate.Status{Self: &ipnstate.PeerStatus{DNSName: "a.b."}})
+	got, _ := buildTailnetStatus(&ipnstate.Status{Self: &ipnstate.PeerStatus{DNSName: "a.b."}}, "pjd110-petrel")
 	b, _ := json.Marshal(got)
 	// 没有对端时 peers 必须是 []，不能是 null：Kotlin 侧按数组读
 	if want := `{"self":{"name":"a","ips":[]},"peers":[]}`; string(b) != want {

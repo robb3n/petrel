@@ -1,8 +1,12 @@
 package com.robb3n.petrel.ui
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -112,9 +116,10 @@ fun Modifier.pressHighlight(
     this
         .drawWithContent {
             val a = alpha.value
-            if (behind && a > 0.01f) drawRect(color = base, alpha = targetAlpha * a)
+            // 透明度只乘一次：base 自带的 alpha 已经算进 targetAlpha，画的时候用不透明的同色
+            if (behind && a > 0.01f) drawRect(color = base.copy(alpha = 1f), alpha = targetAlpha * a)
             drawContent()
-            if (!behind && a > 0.01f) drawRect(color = base, alpha = targetAlpha * a)
+            if (!behind && a > 0.01f) drawRect(color = base.copy(alpha = 1f), alpha = targetAlpha * a)
         }
         .then(
             if (onLongClick == null) {
@@ -158,10 +163,21 @@ fun Modifier.longPressOnly(onLongClickLabel: String?, onLongClick: () -> Unit): 
                 action.value()
             })
         }
-        .semantics {
+        // 合并子节点：读屏把行里的名字、地址与长按操作读成一项
+        .semantics(mergeDescendants = true) {
             onLongClick(label = onLongClickLabel) {
                 action.value()
                 true
             }
         }
+}
+
+/**
+ * 进行中的图标匀速旋转，.9s/圈（skins.md：刷新、测速中的图标）。只在 [spin] 时才起动画；三套皮肤共用这一份。
+ */
+fun Modifier.spinning(spin: Boolean): Modifier = composed {
+    if (!spin) return@composed Modifier
+    val angle by rememberInfiniteTransition(label = "spin")
+        .animateFloat(0f, 360f, infiniteRepeatable(tween(900, easing = LinearEasing)), label = "angle")
+    Modifier.graphicsLayer { rotationZ = angle }
 }

@@ -25,12 +25,15 @@ fail() { log "✗ $*"; exit 1; }
 NOTES="" DRY=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --notes-file) NOTES="${2:-}"; shift 2 ;;
+    # 没有值时 shift 2 不动参数（没开 set -e），循环会一直卡在这一项
+    --notes-file) [ $# -ge 2 ] || fail "缺 --notes-file，或文件为空"; NOTES="$2"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
     *) fail "不认识的参数：$1" ;;
   esac
 done
 [ -n "$NOTES" ] && [ -s "$NOTES" ] || fail "缺 --notes-file，或文件为空"
+# 下面会 cd 到仓库根，相对路径在那之后就指错了地方
+NOTES="$(cd "$(dirname "$NOTES")" && pwd)/$(basename "$NOTES")"
 
 ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)" || fail "不在 git 仓库里"
 cd "$ROOT" || fail "进不了 $ROOT"
@@ -47,7 +50,10 @@ git diff --quiet HEAD || fail "已跟踪文件有未提交改动"
 git tag --points-at HEAD | grep -qx "$tag" || fail "HEAD 上没有 tag $tag（tag 由回火任务的 stamp 打）"
 git fetch -q origin || fail "git fetch 失败"
 [ "$(git rev-parse HEAD)" = "$(git rev-parse '@{upstream}' 2>/dev/null)" ] || fail "HEAD 与上游分支不一致，先 push"
-remote_tag="$(git ls-remote origin "refs/tags/$tag" | cut -f1)"
+# annotated tag 的 ls-remote 结果是 tag 对象；有剥开的 ^{} 行就用它指向的提交
+remote_refs="$(git ls-remote origin "refs/tags/$tag" "refs/tags/$tag^{}")"
+remote_tag="$(awk -v r="refs/tags/$tag^{}" '$2 == r { print $1 }' <<<"$remote_refs")"
+[ -n "$remote_tag" ] || remote_tag="$(awk -v r="refs/tags/$tag" '$2 == r { print $1 }' <<<"$remote_refs")"
 [ "$remote_tag" = "$(git rev-parse HEAD)" ] || fail "origin 上的 $tag 不存在或不指向 HEAD"
 log "前置通过：$tag @ $(git rev-parse --short HEAD)"
 

@@ -346,3 +346,75 @@ proxy-groups:`, 1)
 		t.Errorf("via on the replaced ts node must be dropped, got %v", vias)
 	}
 }
+
+func TestInjectBindsInboundsToLoopback(t *testing.T) {
+	cfg, warnings := inject(t, `
+listeners:
+  - name: mixed-in
+    type: mixed
+    port: 7891
+  - name: socks-local
+    type: socks
+    port: 7892
+    listen: 127.0.0.1
+tunnels:
+  - tcp/udp,0.0.0.0:6553,114.114.114.114:53,proxy
+  - network: [tcp, udp]
+    address: 0.0.0.0:7777
+    target: target.com
+    proxy: proxy
+  - network: [tcp]
+    address: 127.0.0.1:7778
+    target: other.com
+proxies: []
+`)
+	listeners, _ := cfg["listeners"].([]any)
+	for i, l := range listeners {
+		if got := l.(map[string]any)["listen"]; got != "127.0.0.1" {
+			t.Errorf("listener %d listen = %v, want 127.0.0.1", i, got)
+		}
+	}
+	tunnels, _ := cfg["tunnels"].([]any)
+	if got := tunnels[0]; got != "tcp/udp,127.0.0.1:6553,114.114.114.114:53,proxy" {
+		t.Errorf("string tunnel = %v", got)
+	}
+	if got := tunnels[1].(map[string]any)["address"]; got != "127.0.0.1:7777" {
+		t.Errorf("map tunnel address = %v", got)
+	}
+	if got := tunnels[2].(map[string]any)["address"]; got != "127.0.0.1:7778" {
+		t.Errorf("already-loopback tunnel address = %v", got)
+	}
+	// 只有真正改写过的三处（listener 0、tunnel 0、tunnel 1）出警告，且警告里不带配置里的名字
+	n := 0
+	for _, w := range warnings {
+		if strings.Contains(w, "listener") || strings.Contains(w, "tunnel") {
+			n++
+			if strings.Contains(w, "mixed-in") {
+				t.Errorf("warning leaks config content: %q", w)
+			}
+		}
+	}
+	if n != 3 {
+		t.Errorf("got %d inbound warnings, want 3: %v", n, warnings)
+	}
+}
+
+func TestInjectDropsProxyRoutingMark(t *testing.T) {
+	cfg, _ := inject(t, `
+proxies:
+  - name: front
+    type: ss
+    server: 1.2.3.4
+    port: 443
+    cipher: aes-256-gcm
+    password: x
+    routing-mark: 6666
+    interface-name: en0
+`)
+	p := findProxy(t, cfg, "front")
+	for _, k := range []string{"routing-mark", "interface-name"} {
+		if _, ok := p[k]; ok {
+			t.Errorf("proxy still has %s", k)
+		}
+	}
+}

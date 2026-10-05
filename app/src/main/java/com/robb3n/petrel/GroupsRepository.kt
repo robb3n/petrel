@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 
@@ -65,15 +66,16 @@ object GroupsRepository {
 
     /** 乐观更新选中项，失败时回滚并回调错误信息（在 IO 线程回调）。 */
     fun select(group: String, name: String, onError: (String) -> Unit) {
-        val before = _groups.value
-        _groups.value = before.map { if (it.name == group) it.copy(now = name) else it }
+        // 两处写都用 update（CAS）：reload 在另一个 IO 线程上整表替换，非原子的读改写会把它刚写进来的延迟盖回旧值
+        val old = _groups.value.firstOrNull { it.name == group }?.now
+        _groups.update { gs -> gs.map { if (it.name == group) it.copy(now = name) else it } }
         scope.launch {
             runCatching { Ptcore.selectProxy(group, name) }.onFailure {
-                Log.w(TAG, "select failed", it)
-                // 只回滚这一组的选中项，别覆盖期间别处刷新进来的延迟
-                _groups.value = _groups.value.map { g ->
-                    val old = before.firstOrNull { b -> b.name == group }
-                    if (g.name == group && old != null) g.copy(now = old.now) else g
+                // 错误信息带着组名与节点名（配置内容），只给界面
+                Log.w(TAG, "select failed: ${it.javaClass.simpleName}")
+                // 只回滚这一组、且仍停在这次失败的选择上时才回滚：期间人又选了别的节点（可能已经成功），不能把它也撤掉
+                if (old != null) {
+                    _groups.update { gs -> gs.map { g -> if (g.name == group && g.now == name) g.copy(now = old) else g } }
                 }
                 onError(it.message ?: "未知错误")
             }
