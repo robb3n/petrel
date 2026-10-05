@@ -44,3 +44,10 @@ TUN 没建起来（`listener.GetTunConf().Enable == false`）时，**mihomo 不�
 ## 不声明 `setMetered(false)`：VPN 跟随底层网络的计费属性
 
 早期 `VpnService.Builder` 里写了 `setMetered(false)`，结果蜂窝下 VPN 也被所有 App 当成不计流量网络，「仅 Wi-Fi」的备份和更新会走流量。去掉之后，API 29+ 的 VPN 默认继承底层网络的计费属性（`setUnderlyingNetworks(null)` 时按系统默认网络），App 看到的计费状态与没开 VPN 时一致。别再加回去。
+
+## IPv6 接不接管跟着配置的 `ipv6` 走
+
+- 症状：一加真机上微信公众号文章打不开，其余正常。Petrel 日志里成串的 `dial DIRECT (match GeoIP/cn) … --> [240e:…]:443 error: dns resolve failed: ip version error`，同一时间没有任何到微信的 IPv4 连接。
+- 原因：VpnService 无条件 `addRoute("::", 0)`，配置却是 `ipv6: false`。微信用自己的 HTTPDNS 拿到 IPv6 地址直连；包进了 TUN，gvisor 先替 App 完成 TCP 握手，mihomo 随后因为 `ipv6: false` 拒绝拨号。App 看到的是「连上又断」，不是「不可达」，于是一直重试 IPv6、不退回 IPv4。
+- 修法：`startVpn` 建 TUN 前用 `Ptcore.configIPv6` 读配置顶层的 `ipv6`（缺省同 mihomo 取 true），为 false 时不加 IPv6 地址与路由。VpnService 对没有地址 / 路由 / DNS 的地址族默认整族拦截（`Builder.allowFamily` 的文档），不会绕过 VPN 泄漏，App 立刻拿到不可达，走 IPv4。
+- 配置是 `ipv6: true` 时仍接管 IPv6；这时底层网络没有 IPv6 的话，DIRECT 的 IPv6 连接会同样「连上又断」。要用 `ipv6: true`，得确认常用网络都有 IPv6。

@@ -3,6 +3,7 @@ package ptcore
 import (
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 
@@ -33,6 +34,28 @@ var extraControllerKeys = []string{
 func InjectConfig(user []byte, tunFd int, socksAddr string, socksPass string, fallbackSecret string) ([]byte, error) {
 	out, _, _, err := injectConfig(user, tunFd, socksAddr, socksPass, fallbackSecret)
 	return out, err
+}
+
+// ConfigIPv6 读配置顶层的 ipv6（缺省时同 mihomo 取 true），供 Kotlin 建 VpnService 时决定接不接管 IPv6。
+// 配置关了 IPv6 时 mihomo 拨不出 IPv6，TUN 却照收：gvisor 先替 App 完成握手、mihomo 再拨号失败，
+// App 看到的是「连上又断」而不是「不可达」，不会退回 IPv4（微信的公众号文章就卡在这里）。
+// 读不了或解析不了时返回 true，保持接管，由随后的 Start 报真正的错误。
+func ConfigIPv6(configPath string) bool {
+	user, err := os.ReadFile(configPath)
+	if err != nil {
+		return true
+	}
+	return configIPv6(user)
+}
+
+func configIPv6(user []byte) bool {
+	var top struct {
+		IPv6 *bool `yaml:"ipv6"`
+	}
+	if err := yaml.Unmarshal(user, &top); err != nil || top.IPv6 == nil {
+		return true
+	}
+	return *top.IPv6
 }
 
 // injectConfig 同 InjectConfig，另外返回警告与中转标注（节点名 → petrel-via 的值）。

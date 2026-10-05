@@ -111,13 +111,15 @@ class PetrelVpnService : VpnService() {
             failAndStop("未找到配置：${config.path}", startId)
             return
         }
+        // 配置关了 IPv6 就不接管：VpnService 对没有地址和路由的地址族一律拦截（不泄漏），App 立刻得到不可达并退回 IPv4。
+        // 收进 TUN 反而坏事：mihomo 拨不出 IPv6，App 看到的是连上又断，不会退回。见 docs/lessons/vpn-tun-stack.md
+        val ipv6 = Ptcore.configIPv6(config.absolutePath)
         val pfd: ParcelFileDescriptor? = try {
             Builder()
                 .setSession(getString(R.string.app_name))
                 .addAddress("172.19.0.1", 30)
                 .addRoute("0.0.0.0", 0)
-                .addAddress("fdfe:dcba:9876::1", 126)
-                .addRoute("::", 0) // IPv6 也收进 TUN，防止绕过泄漏
+                .apply { if (ipv6) addAddress("fdfe:dcba:9876::1", 126).addRoute("::", 0) }
                 .addDnsServer("172.19.0.2")
                 .setMtu(1400)
                 .addDisallowedApplication(packageName)

@@ -418,3 +418,26 @@ proxies:
 		}
 	}
 }
+
+func TestConfigIPv6(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+		want bool
+	}{
+		{"absent defaults to mihomo's true", "mixed-port: 7890\n", true},
+		{"explicit false", "ipv6: false\nmode: rule\n", false},
+		{"explicit true", "ipv6: true\n", true},
+		{"dns.ipv6 is not the top-level switch", "dns:\n  ipv6: false\n", true},
+		{"unparsable keeps the takeover", "ipv6: [\n", true},
+		{"empty", "", true},
+	}
+	for _, c := range cases {
+		if got := configIPv6([]byte(c.src)); got != c.want {
+			t.Errorf("%s: configIPv6 = %v, want %v", c.name, got, c.want)
+		}
+	}
+	if !ConfigIPv6("/nonexistent/config.yaml") {
+		t.Error("ConfigIPv6 on a missing file should keep the takeover (true)")
+	}
+}
