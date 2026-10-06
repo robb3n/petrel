@@ -47,7 +47,18 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.border
 import androidx.compose.material3.Text
+import com.robb3n.petrel.ExitIpPlace
 import com.robb3n.petrel.ui.model.ConfigUi
+import com.robb3n.petrel.ui.model.ExitIpUi
+import com.robb3n.petrel.ui.model.IpKind
+import com.robb3n.petrel.ui.model.NodeIp
+import com.robb3n.petrel.ui.model.StatSlot
+import com.robb3n.petrel.ui.model.settingsDesc
+import com.robb3n.petrel.ui.model.tagLabel
+import androidx.compose.ui.draw.alpha
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import com.robb3n.petrel.ui.model.ConnStatus
 import com.robb3n.petrel.ui.model.DelayView
 import com.robb3n.petrel.ui.model.HomeUi
@@ -133,7 +144,7 @@ internal fun ShoalHome(ui: HomeUi, a: PetrelActions) {
         appBar = {
             ShoalAppBar(
                 "Petrel",
-                titleTrailing = { Tag(ui.status.label, kind = ui.status.tone.tagKind()) },
+                titleTrailing = { Tag(ui.status.tagLabel, kind = ui.status.tone.tagKind()) },
                 actions = {
                     ShoalIconButton(Ms.refresh, "刷新", a.refresh, enabled = ui.canRefresh && !ui.refreshing, spin = ui.refreshing)
                     ShoalIconButton(Ms.settings, "设置", a.openSettings)
@@ -143,12 +154,17 @@ internal fun ShoalHome(ui: HomeUi, a: PetrelActions) {
         floatingNav = true,
     ) {
         Hero(ui, a)
+        val ip = ui.exitIp
+        if (ip != null && ui.exitIpPlace == ExitIpPlace.Card) {
+            Gap(12.dp)
+            ExitIpIsle(ip, ui.exitIpDirect, a)
+        }
         if (ui.chain.isNotEmpty()) {
             Gap(12.dp)
             ChainIsle(ui, a)
         }
         Gap(12.dp)
-        if (ui.config.present) {
+        if (ui.status != ConnStatus.NoConfig) {
             LinksIsle(ui, a)
             // 相邻外边距折叠：isle 的 margin-bottom 12 与 `.foot` 的 margin-top 10 取 12
             Foot("状态栏快捷开关一按即起，App 被强制停止后也能拉起。", side = 6.dp, top = 12.dp)
@@ -188,7 +204,7 @@ private fun Hero(ui: HomeUi, a: PetrelActions) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
                 CssText(status.label, ui(22f, FontWeight.SemiBold, 27.5f), fg)
-                CssLines(status.sub("点右边的开关，或用状态栏快捷开关"), ui(12f), subColor, Modifier.padding(top = 4.dp))
+                CssLines(ui.statusSub, ui(12f), subColor, Modifier.padding(top = 4.dp))
                 if (ui.error.isNotEmpty()) {
                     val errColor = if (off) c.redFg else c.heroInk
                     Row(
@@ -211,27 +227,31 @@ private fun Hero(ui: HomeUi, a: PetrelActions) {
                 style = if (off) SwStyle.Plain else SwStyle.Hero,
             )
         }
-        if (status != ConnStatus.NoConfig) {
+        val ip = ui.exitIp
+        if (ip != null && ui.exitIpPlace == ExitIpPlace.Hero && !off) {
+            HeroIpLine(ip, ui.exitIpDirect, a)
+        }
+        if (ui.stats.isNotEmpty()) {
             val bg = if (off) c.sf2 else c.sf
-            Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                val d = ui.exitView.readout
+            // 有出口 IP 条时与它隔 12，否则与副文字隔 14（画稿 `.stats{margin-top:14}`）
+            val top = if (ip != null && ui.exitIpPlace == ExitIpPlace.Hero && !off) 12.dp else 14.dp
+            Row(Modifier.padding(top = top), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 // 点格子进对应的 tab（同 Mu3ic 首页统计格）：pager 滑过去，底栏胶囊跟着滑
-                Stat(
-                    value = d.value, unit = d.unit,
-                    key = "出口延迟", color = c.s0, bg = bg, onClick = a.openNodes, modifier = Modifier.weight(1f),
-                )
-                Stat(
-                    value = ui.tailnet?.ratio ?: "—",
-                    unit = "", key = "tailnet 在线", color = c.s3, bg = bg, onClick = a.openTailnet, modifier = Modifier.weight(1f),
-                )
-                Stat(
-                    value = ui.groupSize?.toString() ?: "—",
-                    unit = "", key = "可选出口", color = c.s2, bg = bg, onClick = a.openNodes, modifier = Modifier.weight(1f),
-                )
+                ui.stats.forEach { st ->
+                    val color = when (st.slot) {
+                        StatSlot.S0 -> c.s0
+                        StatSlot.S2 -> c.s2
+                        StatSlot.S3 -> c.s3
+                    }
+                    Stat(st.value, st.unit, st.key, color, bg, onClick = { a.openTab(st.target) }, modifier = Modifier.weight(1f))
+                }
             }
         }
         if (status == ConnStatus.NeedsLogin) {
             OlBtn("去登录 tailnet", a.openTailnet, Modifier.padding(top = 12.dp), icon = Ms.login, onHero = true)
+        }
+        if (status == ConnStatus.ExitNeedsTailnet) {
+            OlBtn("换一个出口", a.openNodes, Modifier.padding(top = 12.dp), icon = Ms.swapHoriz, onHero = true)
         }
         if (status == ConnStatus.NoConfig) {
             OlBtn(ui.importLabel, a.importConfig, Modifier.padding(top = 12.dp), icon = Ms.download, enabled = !ui.importing)
@@ -267,6 +287,137 @@ private fun Stat(value: String, unit: String, key: String, color: Color, bg: Col
     }
 }
 
+/** 国家代码小块（Oswald 500、字距 .06em、圆角）：[big] 是状态卡里的 18 高版本，否则 16 高（链路末跳、节点页）。 */
+@Composable
+private fun CountryChip(cc: String, bg: Color, fg: Color, big: Boolean = false, outlined: Boolean = false) {
+    val h = if (big) 18.dp else 16.dp
+    val shape = RoundedCornerShape(if (big) 6.dp else 5.dp)
+    Box(
+        Modifier
+            .height(h)
+            .widthIn(min = if (big) 26.dp else 22.dp)
+            .clip(shape)
+            .then(if (outlined) Modifier.border(1.dp, bg, shape) else Modifier.background(bg))
+            .padding(horizontal = if (big) 5.dp else 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        CssText(cc, ui(if (big) 11.5f else 10.5f, FontWeight.Medium, if (big) 11.5f else 10.5f, letterSpacing = 0.06.em).copy(fontFamily = Oswald), fg, softWrap = false)
+    }
+}
+
+/** 摆法 A：状态卡里一条半透明的条（国家代码、IP、城市、复制）。仅 tailnet 时城市前写「直连」。 */
+@Composable
+private fun HeroIpLine(ip: ExitIpUi, direct: Boolean, a: PetrelActions) {
+    val c = Shoal.colors
+    Row(
+        Modifier
+            .padding(top = 12.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(c.heroInk.copy(alpha = 0.14f))
+            .padding(start = 10.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)
+            .heightIn(min = 30.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        when (ip) {
+            is ExitIpUi.Ready -> {
+                CountryChip(ip.ip.cc, c.heroInk, c.heroOnInk, big = true)
+                CssText(ip.ip.ip, ui(17f, FontWeight.Medium, 17f, letterSpacing = 0.02.em).copy(fontFamily = Oswald).tabular(), c.heroInk, softWrap = false)
+                CssText(
+                    if (direct) "直连 · ${ip.ip.short}" else ip.ip.short,
+                    ui(12f), c.heroInk.copy(alpha = 0.85f), Modifier.weight(1f), softWrap = false,
+                )
+                ShoalIconButton(Ms.contentCopy, "复制出口 IP", { a.copyExitIp(ip.ip.ip) }, size = 30.dp, iconSize = 17.dp, tint = c.heroInk)
+            }
+            ExitIpUi.Loading -> {
+                CountryChip("··", c.heroInk, c.heroOnInk, big = true)
+                CssText("查询出口 IP…", ui(12.5f, FontWeight.Medium), c.heroInk.copy(alpha = 0.85f), Modifier.weight(1f), softWrap = false)
+            }
+            is ExitIpUi.Unavailable -> {
+                CountryChip("—", c.heroInk, c.heroOnInk, big = true)
+                CssText("查不到出口 IP · ${ip.hint}", ui(12.5f, FontWeight.Medium), c.heroInk.copy(alpha = 0.85f), Modifier.weight(1f), softWrap = false)
+            }
+        }
+    }
+}
+
+/** 摆法 B：独立卡片（IP 大字、位置，下面运营商与 IP 类型两行）。 */
+@Composable
+private fun ExitIpIsle(ip: ExitIpUi, direct: Boolean, a: PetrelActions) {
+    val c = Shoal.colors
+    Isle {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Tile(Ms.public, if (ip is ExitIpUi.Ready) TileTone.Sage else TileTone.Idle)
+            Column(Modifier.weight(1f)) {
+                when (ip) {
+                    is ExitIpUi.Ready -> {
+                        CssText(ip.ip.ip, ui(22f, FontWeight.Medium, 24.2f, letterSpacing = 0.02.em).copy(fontFamily = Oswald).tabular(), c.tx, softWrap = false)
+                        CssLines(
+                            if (direct) "直连 · ${ip.ip.location}" else ip.ip.location,
+                            ui(12f, lineHeight = 16.8f), c.tx2, Modifier.padding(top = 2.dp), maxLines = 2,
+                        )
+                    }
+                    ExitIpUi.Loading -> {
+                        CssText("查询出口 IP…", ui(15f, FontWeight.Medium), c.tx2)
+                        CssText(if (direct) "经手机网络查询" else "经当前出口查询", ui(12f), c.tx2, Modifier.padding(top = 2.dp))
+                    }
+                    is ExitIpUi.Unavailable -> {
+                        CssText("查不到出口 IP", ui(15f, FontWeight.Medium), c.tx2)
+                        CssLines(ip.hint, ui(12f, lineHeight = 16.8f), c.tx2, Modifier.padding(top = 2.dp), maxLines = 2)
+                    }
+                }
+            }
+            if (ip is ExitIpUi.Ready) {
+                ShoalIconButton(Ms.contentCopy, "复制出口 IP", { a.copyExitIp(ip.ip.ip) }, iconSize = 20.dp)
+            }
+        }
+        if (ip is ExitIpUi.Ready) {
+            ShoalCard(Modifier.padding(top = 12.dp)) {
+                KvRow("运营商", ip.ip.isp)
+                KvRow("IP 类型", ip.ip.kind.label)
+            }
+        }
+    }
+}
+
+@Composable
+private fun KvRow(key: String, value: String) {
+    val c = Shoal.colors
+    Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+        // 键名不缩；值靠右、太长时省略（运营商名可能很长）
+        CssText(key, ui(12.5f), c.tx2, softWrap = false)
+        CssText(
+            value, ui(12.5f, FontWeight.Medium).copy(textAlign = androidx.compose.ui.text.style.TextAlign.End), c.tx,
+            Modifier.padding(start = 12.dp).weight(1f), softWrap = false,
+        )
+    }
+}
+
+/** 摆法 C 与节点页共用的一行：`[US] 203.0.113.42 · 洛杉矶 · NTT`。[onButter]：在选中的黄油底上。 */
+@Composable
+private fun IpLine(cc: String, text: String, onButter: Boolean, muted: Boolean = false, trailing: (@Composable () -> Unit)? = null) {
+    val c = Shoal.colors
+    Row(
+        Modifier.padding(top = 5.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        when {
+            muted -> CountryChip(cc, c.sf3, c.em, outlined = true)
+            onButter -> CountryChip(cc, c.ol, c.onol)
+            else -> CountryChip(cc, c.sf3, c.tx)
+        }
+        val color = when {
+            muted -> c.em
+            onButter -> c.butterInk
+            else -> c.tx
+        }
+        CssText(text, ui(12f).tabular(), color, Modifier.weight(1f, fill = false), softWrap = false)
+        trailing?.invoke()
+    }
+}
+
 @Composable
 private fun ChainIsle(ui: HomeUi, a: PetrelActions) {
     val c = Shoal.colors
@@ -281,10 +432,12 @@ private fun ChainIsle(ui: HomeUi, a: PetrelActions) {
             Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.sf2).padding(6.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
+            val ip = ui.exitIp.takeIf { ui.exitIpPlace == ExitIpPlace.Chain }
             ui.chain.forEachIndexed { i, hop ->
                 // 每跳往下画到下一跳里的连接线要压在下一跳的底色（出口的 butter）之上：前面的行 zIndex 更高、后画
                 HopRow(
                     hop, last = i == ui.chain.lastIndex, group = ui.groupName ?: "", delay = ui.exitView, onClick = a.openNodes,
+                    ip = if (hop.role == HopRole.Exit) ip else null,
                     modifier = Modifier.zIndex((ui.chain.size - i).toFloat()),
                 )
             }
@@ -294,10 +447,10 @@ private fun ChainIsle(ui: HomeUi, a: PetrelActions) {
 
 /**
  * `.hop`：链路上的一跳（同 `.row`，图标 19 `--tx2`；非末行有 2 宽的竖线连到下一跳：`left:18.5; top:37; bottom:-14`）。
- * 末跳是出口，`.hop.sel`（`--butter` 底），带延迟徽章。
+ * 末跳是出口，`.hop.sel`（`--butter` 底），带延迟徽章；摆法 C 时下面多一行出口 IP。没开的 `ts`（仅代理）用粉底。
  */
 @Composable
-private fun HopRow(hop: Hop, last: Boolean, group: String, delay: DelayView, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun HopRow(hop: Hop, last: Boolean, group: String, delay: DelayView, onClick: () -> Unit, ip: ExitIpUi?, modifier: Modifier = Modifier) {
     val c = Shoal.colors
     val exit = hop.role == HopRole.Exit
     val shape = RoundedCornerShape(14.dp)
@@ -306,7 +459,11 @@ private fun HopRow(hop: Hop, last: Boolean, group: String, delay: DelayView, onC
         HopRole.Front, HopRole.Relay -> Ms.swapHoriz
         HopRole.Exit -> Ms.radioButtonChecked
     }
-    val sub = hop.role.caption(group, detailed = true)
+    val (bg, ink) = when {
+        exit -> c.butter to c.butterInk
+        hop.blocked -> c.pink to c.pinkInk
+        else -> Color.Transparent to null
+    }
     Row(
         modifier
             .fillMaxWidth()
@@ -320,18 +477,24 @@ private fun HopRow(hop: Hop, last: Boolean, group: String, delay: DelayView, onC
                     )
                 }
             }
-            .background(if (exit) c.butter else Color.Transparent, shape)
+            .background(bg, shape)
             .clip(shape)
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Icon(icon, null, tint = if (exit) c.butterInk else c.tx2, modifier = Modifier.size(19.dp))
+        Icon(icon, null, tint = ink ?: c.tx2, modifier = Modifier.size(19.dp))
         Column(Modifier.weight(1f)) {
             // 当前出口的长名字不截断：连字符后允许折到两行
             if (exit) CssLines(hop.name.breakAfterHyphens(), ui(13.5f, FontWeight.Medium), c.butterInk, maxLines = 2)
-            else CssText(hop.name, ui(13.5f, FontWeight.Medium), c.tx)
-            CssText(sub, ui(11.5f), c.tx2, Modifier.padding(top = 1.dp))
+            else CssText(hop.name, ui(13.5f, FontWeight.Medium), ink ?: c.tx)
+            CssText(hop.caption(group), ui(11.5f), if (hop.blocked) c.pinkInk else c.tx2, Modifier.padding(top = 1.dp))
+            when (ip) {
+                is ExitIpUi.Ready -> IpLine(ip.ip.cc, ip.ip.line, onButter = true)
+                ExitIpUi.Loading -> IpLine("··", "查询出口 IP…", onButter = true)
+                is ExitIpUi.Unavailable -> IpLine("—", "查不到出口 IP", onButter = true)
+                null -> Unit
+            }
         }
         if (exit) {
             LatBadge(delay.text, delay.band)
@@ -341,19 +504,44 @@ private fun HopRow(hop: Hop, last: Boolean, group: String, delay: DelayView, onC
 
 @Composable
 private fun LinksIsle(ui: HomeUi, a: PetrelActions) {
-    val endText = ui.tailnetEnd.view(spaced = true).text
+    val c = Shoal.colors
+    val endText = ui.tailnetEnd.view().text
     Isle(padding = 6.dp) {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            if (ui.tailnetDisabled) {
+                // 没开的那一路：点了去设置里打开
+                ListRow(
+                    "tailnet", sub = ui.tailnetSub, titleColor = c.tx2,
+                    leading = { Tile(Ms.lan, TileTone.Idle) },
+                    onClick = a.openSettings, role = Role.Button, onClickLabel = "打开设置",
+                    trailing = { RowEnd(endText) },
+                )
+            } else {
+                ListRow(
+                    "tailnet", sub = ui.tailnetSub,
+                    leading = { Tile(Ms.lan, TileTone.Mint) },
+                    onClick = a.openTailnet, role = Role.Button,
+                    trailing = { RowEnd(endText, Ms.chevronRight) },
+                )
+            }
+            if (ui.proxyDisabled) {
+                ListRow(
+                    "代理", sub = "仅 tailnet 模式下未启用", titleColor = c.tx2,
+                    leading = { Tile(Ms.altRoute, TileTone.Idle) },
+                    onClick = a.openSettings, role = Role.Button, onClickLabel = "打开设置",
+                    trailing = { RowEnd("未启用") },
+                )
+            }
             ListRow(
-                "tailnet", sub = ui.tailnetSub,
-                leading = { Tile(Ms.lan, TileTone.Mint) },
-                onClick = a.openTailnet, role = Role.Button,
-                trailing = { RowEnd(endText, Ms.chevronRight) },
-            )
-            ListRow(
-                "配置", sub = "${ui.config.name} · ${ui.config.stampShort}",
+                "配置", sub = if (ui.config.present) "${ui.config.name} · ${ui.config.stampShort}" else "还没有配置",
                 leading = { Tile(Ms.description, TileTone.Butter) },
                 onClick = a.openConfig, role = Role.Button,
+                trailing = { RowEnd(icon = Ms.chevronRight) },
+            )
+            ListRow(
+                "连接模式", sub = ui.mode.title,
+                leading = { Tile(Ms.tune, TileTone.Brown) },
+                onClick = a.openSettings, role = Role.Button,
                 trailing = { RowEnd(icon = Ms.chevronRight) },
             )
         }
@@ -404,13 +592,16 @@ internal fun ShoalNodes(ui: NodesUi, a: PetrelActions) {
                 ShoalCard(Modifier.padding(top = 12.dp)) {
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         g.members.forEach { m ->
-                            val v = m.delay.view(ui.testing)
+                            val v = m.delayView(ui.testing)
                             ListRow(
                                 m.name, sub = m.subtitle, titleWrap = m.selected,
                                 icon = if (m.selected) Ms.radioButtonChecked else Ms.radioButtonUnchecked,
+                                titleColor = if (m.blocked && !m.selected) Shoal.colors.tx2 else null,
                                 selected = m.selected,
                                 role = Role.RadioButton,
-                                onClick = { a.select(g.name, m.name) },
+                                // 经没开的 tailnet 的节点（仅代理）不能选
+                                onClick = if (m.blocked) null else ({ a.select(g.name, m.name) }),
+                                extra = { NodeIpLine(m.ip, m.selected) },
                                 trailing = { LatBadge(v.text, v.band) },
                             )
                         }
@@ -429,7 +620,16 @@ internal fun ShoalNodes(ui: NodesUi, a: PetrelActions) {
                         ListRow(
                             n.name,
                             sub = n.caption,
-                            leading = { Tile(if (n.isTs) Ms.lan else Ms.swapHoriz, if (n.isTs) TileTone.Mint else TileTone.Brown) },
+                            leading = {
+                                Tile(
+                                    if (n.isTs) Ms.lan else Ms.swapHoriz,
+                                    when {
+                                        n.disabled -> TileTone.Idle
+                                        n.isTs -> TileTone.Mint
+                                        else -> TileTone.Brown
+                                    },
+                                )
+                            },
                             trailing = n.status?.let { st ->
                                 {
                                     Tag(
@@ -450,6 +650,26 @@ internal fun ShoalNodes(ui: NodesUi, a: PetrelActions) {
     }
 }
 
+/** 节点行的出口 IP：记下的写 `[US] IP · 城市 · 运营商` 加「机房 / 住宅」小标签；没记下的用浅色说明。 */
+@Composable
+private fun NodeIpLine(ip: NodeIp, selected: Boolean) {
+    val c = Shoal.colors
+    when (ip) {
+        NodeIp.None -> Unit
+        is NodeIp.Missing -> IpLine("··", ip.text, onButter = selected, muted = !selected)
+        is NodeIp.Known -> IpLine(ip.ip.cc, ip.ip.line, onButter = selected) {
+            val (bg, fg) = when {
+                selected -> c.heroInk.copy(alpha = if (c.isDark) 0.12f else 0.55f) to c.butterInk
+                ip.ip.kind == IpKind.Residential -> c.mint to c.mintInk
+                else -> c.sf3 to c.tx2
+            }
+            Box(Modifier.clip(PillShape).background(bg).padding(horizontal = 5.dp, vertical = 3.dp)) {
+                CssText(ip.ip.kind.label, ui(10f, FontWeight.Medium, 10f), fg, softWrap = false)
+            }
+        }
+    }
+}
+
 // =====================================================================
 // tailnet
 // =====================================================================
@@ -461,6 +681,12 @@ internal fun ShoalTailnet(ui: TailnetUi, a: PetrelActions) {
             Column(Modifier.fillMaxSize().statusBarsPadding()) {
                 ShoalAppBar("tailnet")
                 CenterNote("VPN 未连接", "连接后显示 tailnet 状态")
+            }
+        }
+        TailnetUi.Disabled -> {
+            Column(Modifier.fillMaxSize().statusBarsPadding()) {
+                ShoalAppBar("tailnet")
+                CenterNote("tailnet 未启用", "仅代理模式下不启动 tailnet，在设置里打开")
             }
         }
         is TailnetUi.NeedsLogin -> TailnetLogin(ui, a)
@@ -654,18 +880,37 @@ internal fun ShoalConfig(ui: ConfigUi, a: PetrelActions) {
 
 @Composable
 internal fun ShoalSettings(ui: SettingsUi, a: PetrelActions) {
+    val c = Shoal.colors
     var licenses by remember { mutableStateOf(false) }
     ScreenFrame(appBar = { ShoalAppBar("设置", onBack = a.back) }, floatingNav = false) {
         Isle {
+            PopHead("连接", sub = "开关和状态栏快捷开关都按这里启动", tile = { Tile(Ms.powerSettingsNew, TileTone.Ol) })
+            ShoalCard(Modifier.padding(top = 12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    // 只剩一个开着时它锁住（变淡、点了不生效）：至少要开一个
+                    ModeSwitchRow("tailnet", "内置节点，也是代理链的第一跳", Ms.lan, TileTone.Mint, ui.mode.tailnetOn, !ui.mode.proxyOn, a.setTailnetOn)
+                    ModeSwitchRow("代理", "mihomo 按配置分流", Ms.altRoute, TileTone.Ol, ui.mode.proxyOn, !ui.mode.tailnetOn, a.setProxyOn)
+                }
+            }
+            SettingsNote(ui.mode.settingsDesc)
+            Row(
+                Modifier.padding(start = 6.dp, end = 6.dp, top = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Ms.sync, null, tint = c.em, modifier = Modifier.size(15.dp))
+                CssText("VPN 开着时切换，会自动重连一次", ui(12f), c.em)
+            }
+        }
+        Gap(12.dp)
+        Isle {
             PopHead("外观", tile = { Tile(Ms.palette, TileTone.Brown) })
             val inner = PaddingValues(start = 6.dp, end = 6.dp, top = 14.dp, bottom = 8.dp)
-            // 只列已经实现的皮肤；只有一套时整行不显示
-            if (ui.skins.size > 1) {
-                Lbl("皮肤", padding = inner)
-                Seg(ui.skins, ui.skin, a.setSkin, label = { it.title })
-            }
             Lbl("明暗", padding = inner)
             Seg(UiTone.entries, ui.tone, a.setTone, label = { it.title })
+            Lbl("连接页的出口 IP", padding = inner)
+            Seg(ExitIpPlace.entries, ui.exitIpPlace, a.setExitIpPlace, label = { it.title })
+            SettingsNote(ui.exitIpPlace.desc)
         }
         Gap(12.dp)
         Isle(padding = 6.dp) {
@@ -689,4 +934,36 @@ internal fun ShoalSettings(ui: SettingsUi, a: PetrelActions) {
         }
     }
     if (licenses) LicensesDialog(onDismiss = { licenses = false })
+}
+
+/** 设置页「连接」里的一个开关行：[locked] 时开关变淡、点了不生效（至少要开一个）。 */
+@Composable
+private fun ModeSwitchRow(
+    title: String,
+    sub: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    tone: TileTone,
+    on: Boolean,
+    locked: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    ListRow(
+        title, sub = sub,
+        leading = { Tile(icon, tone) },
+        trailing = {
+            Sw(
+                checked = on,
+                onClick = { onChange(!on) },
+                label = title,
+                modifier = Modifier.alpha(if (locked) 0.45f else 1f),
+                enabled = !locked,
+            )
+        },
+    )
+}
+
+/** 设置里浮岛下的说明（12、行高 1.55、`--tx2`）。 */
+@Composable
+private fun SettingsNote(text: String) {
+    CssLines(text, ui(12f, lineHeight = 18.6f), Shoal.colors.tx2, Modifier.padding(start = 6.dp, end = 6.dp, top = 10.dp))
 }

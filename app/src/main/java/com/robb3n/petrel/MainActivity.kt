@@ -27,9 +27,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.rememberNavController
 import com.robb3n.petrel.ui.PetrelApp
 import com.robb3n.petrel.ui.model.Tab
-import com.robb3n.petrel.ui.skin.PetrelSkin
 import com.robb3n.petrel.ui.skin.rememberTabPager
-import com.robb3n.petrel.ui.skin.skinOf
+import com.robb3n.petrel.ui.skin.shoal.ShoalSkin
 
 /** 主界面入口：VPN 授权、EXTRA_START、通知权限；界面本身在 ui/ 下。 */
 class MainActivity : ComponentActivity() {
@@ -49,8 +48,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 冷启动不闪：setContent 之前先按当前皮肤与明暗设好窗口底色和系统栏图标色（UiPrefs 在第一次访问时同步读回）
-        applyChrome(resolveDark(UiPrefs.tone.value, systemDark()), skinOf(UiPrefs.skin.value))
+        // 冷启动不闪：setContent 之前先按明暗设好窗口底色和系统栏图标色（UiPrefs 在第一次访问时同步读回）
+        applyChrome(resolveDark(UiPrefs.tone.value, systemDark()))
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
@@ -74,18 +73,15 @@ class MainActivity : ComponentActivity() {
         // 而且不带 LAUNCHED_FROM_HISTORY：这时不能再处理 EXTRA_START，否则悄悄打开了人刚关掉的 VPN
         if (savedInstanceState == null) handleStartExtra(intent)
         setContent {
-            val skinKey by UiPrefs.skin.collectAsStateWithLifecycle()
             val tone by UiPrefs.tone.collectAsStateWithLifecycle()
             // 先解析出应用实际的明暗，再让系统栏图标色跟它走；这个值必须在组合期读，SideEffect 才会随它重跑
             val dark = resolveDark(tone, isSystemInDarkTheme())
-            val skin = skinOf(skinKey)
-            SideEffect { applyChrome(dark, skin) }
-            // 导航状态放在皮肤之上：换皮肤时 Theme / Shell 换成别的 composable，里面建的 NavController / pager 状态会丢，人就回到首页
+            SideEffect { applyChrome(dark) }
+            // 导航状态建在主题之外：主题随明暗重组时 NavController / pager 状态不丢
             val nav = rememberNavController()
             val pager = rememberTabPager(rememberPagerState { Tab.entries.size })
-            skin.Theme(dark) {
+            ShoalSkin.Theme(dark) {
                 PetrelApp(
-                    skin = skin,
                     nav = nav,
                     pager = pager,
                     // 很多文件管理器把 YAML 报成 application/octet-stream，所以不按 MIME 过滤
@@ -102,11 +98,11 @@ class MainActivity : ComponentActivity() {
     private fun systemDark() = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
 
     /**
-     * 窗口底色 = 该皮肤该明暗下的页面底色；状态栏 / 导航栏图标色按应用实际明暗选
+     * 窗口底色 = 该明暗下的页面底色；状态栏 / 导航栏图标色按应用实际明暗选
      * （`SystemBarStyle.light` = 浅色背景配深色图标，`.dark` = 白图标），不直接照抄系统深色开关。
      */
-    private fun applyChrome(dark: Boolean, skin: PetrelSkin) {
-        window.setBackgroundDrawable(ColorDrawable(skin.pageColor(dark)))
+    private fun applyChrome(dark: Boolean) {
+        window.setBackgroundDrawable(ColorDrawable(ShoalSkin.pageColor(dark)))
         val bars = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
         enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
     }

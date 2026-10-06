@@ -23,7 +23,8 @@ Android 常驻代理 App：把 mihomo 内核和一个内置 tailnet 节点（tsn
 - **不用 mihomo 自带的 `type: tailscale` 出站**：它把 tsnet 实例放在未导出字段里，App 拿不到状态、节点列表和登录流，tailnet 面板无从做起。
 - **衔接**：tsnet 的 `Loopback()` 在 127.0.0.1 上开一个带口令的 SOCKS5（支持 UDP）。App 加载配置时注入一个名为 `ts` 的 `type: socks5` 节点，端口和口令都在运行时生成。用户配置只按名字引用 `ts`，例如代理前置节点写 `dialer-proxy: ts`。
 - **单一 VpnService**：TUN 的 fd 交给 mihomo。防自环用 `addDisallowedApplication(packageName)` 把本 App 排除出 VPN，本进程的 mihomo 出站与 tsnet 的 WireGuard / DERP / 控制面连接都走底层网络。由此 **tun stack 固定为 gvisor**：system / mixed 靠内核 NAT，回包会绕过 tun 而断链。细节见 `docs/lessons/vpn-tun-stack.md`。
-- **tsnet 随 VPN 启动立即 Up**，不等第一条连接。
+- **tsnet 随 VPN 启动立即 Up**，不等第一条连接（仅代理模式不起 tsnet）。
+- **连接模式**：设置里 tailnet / 代理两个开关（至少开一个）经 `Ptcore.start` 的 `mode` 进内核。仅 tailnet：VpnService 只路由 `100.64.0.0/10` 与 `fd7a:115c:a1e0::/48`，内核用内置的 `MATCH,ts` 配置、不读用户配置；仅代理：不起 tsnet，`ts` 换成连不上的占位节点。规格见 `docs/spec/conn-mode.md`。
 - **网络切换**：Kotlin 侧用 `NOT_VPN + INTERNET` 的请求跟踪底层网络（不能用 `registerDefaultNetworkCallback`：它在 Android 16 上跟踪到的是自己的 VPN），有变化就经 `NotifyNetworkChanged` 去抖后调用 `tsnet.Server.Sys().NetMon.InjectEvent()` 唤醒 tsnet（tailscale 的 netmon 在 Android 上 10 分钟才轮询一次）。Android 上的网卡枚举由 mihomo `adapter/outbound/tailscale.go` 的 `init` 用 `anet` 注册（同一个 tailscale 模块，我们的 tsnet 直接受益）。首个原型实测切网自动恢复，见 `docs/lessons/network-change.md`。
 
 ### v1 功能范围
@@ -38,7 +39,8 @@ Android 常驻代理 App：把 mihomo 内核和一个内置 tailnet 节点（tsn
 - **tailnet 面板**：
   - 登录 / 登出：配置里不写 auth-key，tsnet 通知里的登录链接做成按钮。
   - 本机状态，以及节点列表（是否在线、直连还是中继）。
-- **三套皮肤**：Shoal（默认）、夜航、Tonal 三种界面，设置页里切换，明暗另有「跟随系统 / 浅 / 深」三档；行为、数据与画稿没画到的页以 `docs/spec/skins.md` 为准，视觉真相源是 `docs/spec/assets/ui-skins/`。
+- **界面**：只有 Shoal 一套皮肤（夜航、Tonal 已于 2026-10-06 删掉），明暗「跟随系统 / 浅 / 深」三档；行为、数据与画稿没画到的页以 `docs/spec/skins.md` 为准，视觉真相源是 `docs/spec/assets/ui-skins/`。
+- **连接模式与出口 IP**：tailnet + 代理（默认）/ 仅 tailnet / 仅代理；连接页显示当前出口的 IP 与归属地（三种摆法设置里切换），节点页显示各节点记下的出口 IP。见 `docs/spec/conn-mode.md`。
 - **v1 不做**：订阅、多份配置、规则编辑、分应用代理、exit node、Taildrop。
 
 ### 硬边界
@@ -46,7 +48,7 @@ Android 常驻代理 App：把 mihomo 内核和一个内置 tailnet 节点（tsn
 - 配置文件、节点凭据、tailnet 状态与任何密钥**永不进仓库**。仓库按公开的标准管理：内嵌 mihomo 决定了许可证只能是 GPL-3（本项目取 GPL-3.0-or-later）。
 - 不 fork mihomo。内核问题先找上游，或在 Go 层外围绕开。
 - App 名与文案不使用 "Tailscale" 商标。
-- 日志、check 复述、lessons 和提交里不得出现配置内容、secret、节点凭据或完整的登录 URL；唯一例外是 Go 层只打在设备 logcat 里的 `tailnet login URL:`，它是取登录链接的渠道。（Kotlin 侧的 `state` 日志把 `loginURL` 记成 `<set>`，校验报错与异常信息也不进日志。）
+- 日志、check 复述、lessons 和提交里不得出现配置内容、secret、节点凭据或完整的登录 URL；唯一例外是 Go 层只打在设备 logcat 里的 `tailnet login URL:`，它是取登录链接的渠道。（Kotlin 侧的 `state` 日志把 `loginURL` 记成 `<set>`，校验报错与异常信息也不进日志。）出口 IP 与归属地的查询结果同样不进日志。
 
 ### 参考实现
 
@@ -133,7 +135,7 @@ opt-in `/release`，只由人发起。发布的是回火任务的 stamp 打过 t
 
 ## 代码约定 / 经验
 
-- **新功能 = `ui/model` 推导一次 + 三套皮肤各画一次**：数据推导（状态映射、链路、延迟分档、文案）只写在 `ui/model/`（纯函数，JVM 单测 `./gradlew :app:testDebugUnitTest`），皮肤包（`ui/skin/<shoal|night|tonal>/`）只渲染模型、调用 `PetrelActions`，**不直接读 repository 或 `CoreBridge`**。动皮肤、系统栏、冷启动底色之前先读 `docs/lessons/skins.md`。
+- **新功能 = `ui/model` 推导一次 + Shoal 渲染**：数据推导（状态映射、链路、延迟分档、文案）只写在 `ui/model/`（纯函数，JVM 单测 `./gradlew :app:testDebugUnitTest`），`ui/skin/shoal/` 只渲染模型、调用 `PetrelActions`，**不直接读 repository 或 `CoreBridge`**。动皮肤、系统栏、冷启动底色之前先读 `docs/lessons/skins.md`。
 - 项目级踩坑落 `docs/lessons/`，随 stamp 进 git（如 VPN 自环、tsnet 网络切换、各 ROM 的快捷开关与后台行为）。
 - **动 VpnService 的防自环方式、tun stack 或 mihomo 构建标签之前，先读 `docs/lessons/vpn-tun-stack.md`**。三者互相牵制：本 App 排除出 VPN 就只能用 gvisor；不带 `cmfa` 标签 TUN 建不起来。
 - **动网络回调、`ptcore` 的锁、tsnet 的日志或本机的 tailnet 节点名之前，先读 `docs/lessons/network-change.md`**。要点：
@@ -141,6 +143,7 @@ opt-in `/release`，只由人发起。发布的是回火任务的 stamp 打过 t
   - 切网要调 `NetMon.InjectEvent()` 唤醒 tsnet。
   - 持有 `mu` 时不得调用 tsnet / mihomo / Host，否则会和 tailscale 的 Logf 互相卡死。
 - **Kotlin 调 `Ptcore.*` 一律放在服务的 worker 线程或 `Dispatchers.IO`，不在主线程、也不在系统回调线程（含 `onDestroy`、网络回调）。** 原因：Go 调用可能卡在 tsnet 内部锁、配置解析或 geodata 下载上；主线程会 ANR，系统回调线程会堵死整个进程的网络回调。死锁的来龙去脉见 `docs/lessons/network-change.md` 的「死锁」一节。
+- **动连接模式（路由、`ts` 占位、自动测速的时机）或出口 IP 查询之前，先读 `docs/lessons/conn-mode.md`**。
 - **动配置导入、GeoIP 替换、RESTART、服务的启动返回值（`onStartCommand` 的 STICKY / `stopSelf`）或服务的停止 / 撤通知之前，先读 `docs/lessons/config-import.md`**。
 - **动磁贴、`TileLaunchActivity` / `MainActivity` 对启动 intent 的处理、首次登录流程或在 ColorOS 上调试之前，先读 `docs/lessons/tile-and-device-testing.md`**。
 

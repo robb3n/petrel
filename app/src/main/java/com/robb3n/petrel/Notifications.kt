@@ -55,7 +55,7 @@ object Notifications {
         ctx, requestCode, Intent(ctx, PetrelVpnService::class.java).setAction(action), PendingIntent.FLAG_IMMUTABLE,
     )
 
-    private fun needsLogin(s: CoreState) = s.vpn == "running" && s.tailnet == "NeedsLogin"
+    private fun needsLogin(s: CoreState) = s.vpn == "running" && s.mode != ConnMode.Proxy && s.tailnet == TAILNET_NEEDS_LOGIN
 
     fun title(s: CoreState): String = when {
         s.vpn == "starting" -> "连接中"
@@ -63,13 +63,21 @@ object Notifications {
         else -> "已连接"
     }
 
-    fun body(s: CoreState): String? = when {
-        s.vpn == "starting" -> null
-        needsLogin(s) -> "登录之前代理用不了"
-        s.tailnet == "Running" -> {
-            val tailnet = "tailnet ${s.tailnetIPs.firstOrNull() ?: ""}".trimEnd()
-            if (s.exit.isEmpty()) tailnet else "出口 ${s.exit} · $tailnet"
+    fun body(s: CoreState): String? {
+        val exit = if (s.exit.isEmpty()) null else "出口 ${s.exit}"
+        return when {
+            s.vpn == "starting" -> null
+            needsLogin(s) -> if (s.mode == ConnMode.Tailnet) "登录之后才能访问 tailnet" else "登录之前代理用不了"
+            s.mode == ConnMode.Proxy -> listOfNotNull("仅代理", exit).joinToString(" · ")
+            s.tailnet == TAILNET_RUNNING -> {
+                val tailnet = "tailnet ${s.tailnetIPs.firstOrNull() ?: ""}".trimEnd()
+                when {
+                    s.mode == ConnMode.Tailnet -> "仅 $tailnet"
+                    exit == null -> tailnet
+                    else -> "$exit · $tailnet"
+                }
+            }
+            else -> "tailnet ${s.tailnet}"
         }
-        else -> "tailnet ${s.tailnet}"
     }
 }

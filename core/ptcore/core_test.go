@@ -158,11 +158,66 @@ func TestResetAfterFailureClearsHalfStartedState(t *testing.T) {
 
 // 空节点名直接让 Start 失败，不去起 tsnet。
 func TestStartRejectsEmptyHostname(t *testing.T) {
-	err := Start(t.TempDir(), "/nonexistent", -1, "  ", &stateHost{onState: func(string) {}})
+	err := Start(t.TempDir(), "/nonexistent", -1, "  ", ModeBoth, &stateHost{onState: func(string) {}})
 	host.Store(nil)
 	if err == nil || !strings.Contains(err.Error(), "hostname") {
 		t.Fatalf("err = %v", err)
 	}
+}
+
+// 未知模式直接让 Start 失败；失败后状态复位，可以再次 Start。
+func TestStartRejectsUnknownMode(t *testing.T) {
+	err := Start(t.TempDir(), "/nonexistent", -1, "host", "both-ish", &stateHost{onState: func(string) {}})
+	host.Store(nil)
+	if err == nil || !strings.Contains(err.Error(), "mode") {
+		t.Fatalf("err = %v", err)
+	}
+	mu.Lock()
+	still := active
+	mu.Unlock()
+	if still {
+		t.Fatal("active left set after a failed Start")
+	}
+}
+
+// 仅 tailnet 模式的内置配置注入后 mihomo 解析得过，且只有一条 MATCH,ts。
+func TestTailnetOnlyConfigParses(t *testing.T) {
+	if msg := ValidateConfig(t.TempDir(), tailnetOnlyConfig); msg != "" {
+		t.Fatalf("tailnet-only config rejected: %s", msg)
+	}
+	out, _, _, err := injectConfig(tailnetOnlyConfig, 0, "127.0.0.1:1080", "p", "s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "MATCH,ts") || !strings.Contains(string(out), "name: ts") {
+		t.Fatalf("injected config lacks the ts rule or node:\n%s", out)
+	}
+}
+
+// 自动测速：ModeProxy 不等 tailnet，其余模式要等 tailnet Running。
+func TestTakeAutoTestByMode(t *testing.T) {
+	cases := []struct {
+		mode, tailnet string
+		want          bool
+	}{
+		{ModeProxy, tailnetDisabled, true},
+		{ModeBoth, "Starting", false},
+		{ModeBoth, "Running", true},
+		{ModeTailnet, "NeedsLogin", false},
+	}
+	for _, c := range cases {
+		mu.Lock()
+		cur = state{VPN: "running", Tailnet: c.tailnet, Mode: c.mode}
+		autoTested = false
+		mu.Unlock()
+		if _, got := takeAutoTest(); got != c.want {
+			t.Errorf("mode %s tailnet %s: takeAutoTest = %v, want %v", c.mode, c.tailnet, got, c.want)
+		}
+	}
+	mu.Lock()
+	cur = state{VPN: "stopped", Tailnet: "NoState", TailnetIPs: []string{}}
+	autoTested = false
+	mu.Unlock()
 }
 
 type stateHost struct{ onState func(string) }

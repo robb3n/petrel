@@ -137,4 +137,6 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
+    // 单测里用真的 org.json（Android 的是空实现）：ip-api 应答的解析要测
+    testImplementation("org.json:json:20240303")
 }

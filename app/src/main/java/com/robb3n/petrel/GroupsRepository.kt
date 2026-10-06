@@ -22,7 +22,18 @@ data class ProxyUi(
     val delay: Int,
     /** [chain] 里由配置的 `petrel-via` 标注出来的中转（不是 mihomo 节点） */
     val relays: List<String> = emptyList(),
-)
+    /** 服务器地址（host:port）；组、DIRECT 等没有地址的为空串。记下的出口 IP 按「名字 + 地址」对应。 */
+    val addr: String = "",
+) {
+    /** 链路经过 tailnet（`ts`）：仅代理模式下不可用。 */
+    val viaTailnet: Boolean get() = TS_NODE in chain
+
+    /** 记下的出口 IP 的键：「名字|地址」；没有服务器地址的成员（组、DIRECT）不记，为 null。 */
+    val ipKey: String? get() = if (addr.isEmpty()) null else "$name|$addr"
+}
+
+/** Petrel 注入的 tailnet 节点名（Go 侧 `tsProxyName`）。 */
+const val TS_NODE = "ts"
 
 data class ProxyGroupUi(
     val name: String,
@@ -82,7 +93,7 @@ object GroupsRepository {
         }
     }
 
-    /** 测所有组的延迟，进行中 [testing] 为 true。 */
+    /** 测所有组的延迟，进行中 [testing] 为 true；测完顺带给还没记下出口 IP 的节点补查（[ExitIpRepository.fillMissing]）。 */
     fun testDelay() {
         if (!_testing.compareAndSet(expect = false, update = true)) return
         scope.launch {
@@ -91,6 +102,7 @@ object GroupsRepository {
             } finally {
                 _testing.value = false
             }
+            ExitIpRepository.fillMissing()
         }
     }
 
@@ -99,7 +111,11 @@ object GroupsRepository {
         if (!_testing.compareAndSet(expect = false, update = true)) return
         scope.launch {
             try {
-                runCatching { Ptcore.refresh() }.onFailure { Log.w(TAG, "refresh failed", it) }
+                ExitIpRepository.requery()
+                // 仅 tailnet 没有代理组，内核的 Refresh 没事可做；只重拉节点列表
+                if (CoreBridge.state.value.mode != ConnMode.Tailnet) {
+                    runCatching { Ptcore.refresh() }.onFailure { Log.w(TAG, "refresh failed", it) }
+                }
                 runCatching { TailnetRepository.refresh() }.onFailure { Log.w(TAG, "tailnet refresh failed", it) }
             } finally {
                 _testing.value = false
@@ -141,6 +157,7 @@ object GroupsRepository {
                         chain = List(chain.length()) { chain.getString(it) },
                         delay = p.optInt("delay", -1),
                         relays = List(relays.length()) { relays.getString(it) },
+                        addr = p.optString("addr"),
                     )
                 },
             )

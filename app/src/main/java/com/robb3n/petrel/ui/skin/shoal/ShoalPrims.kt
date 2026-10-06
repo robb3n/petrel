@@ -203,10 +203,12 @@ fun ListRow(
     onClickLabel: String? = null,
     onLongClick: (() -> Unit)? = null,
     onLongClickLabel: String? = null,
+    /** 主行下面再加一行（节点的出口 IP）：与主文左对齐、横跨到行尾（压在尾部徽章下面），不和徽章抢宽度。 */
+    extra: (@Composable () -> Unit)? = null,
     trailing: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val c = Shoal.colors
-    Row(
+    Column(
         modifier
             .fillMaxWidth()
             .clip(RowShape)
@@ -229,30 +231,43 @@ fun ListRow(
                 },
             )
             .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        if (leading != null) {
-            leading()
-        } else if (icon != null) {
-            val tint = iconTint ?: if (selected) c.butterInk else c.tx2
-            if (iconBox != null) {
-                Box(Modifier.width(iconBox), contentAlignment = Alignment.Center) { Icon(icon, null, tint = tint, modifier = Modifier.size(19.dp)) }
-            } else {
-                Icon(icon, null, tint = tint, modifier = Modifier.size(19.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (leading != null) {
+                leading()
+            } else if (icon != null) {
+                val tint = iconTint ?: if (selected) c.butterInk else c.tx2
+                if (iconBox != null) {
+                    Box(Modifier.width(iconBox), contentAlignment = Alignment.Center) { Icon(icon, null, tint = tint, modifier = Modifier.size(19.dp)) }
+                } else {
+                    Icon(icon, null, tint = tint, modifier = Modifier.size(19.dp))
+                }
             }
-        }
-        Column(Modifier.weight(1f)) {
-            val titleStyle = ui(13.5f, FontWeight.Medium)
-            val titleTint = titleColor ?: if (selected) c.butterInk else c.tx
-            if (titleWrap) CssLines(title.breakAfterHyphens(), titleStyle, titleTint, maxLines = 2) else CssText(title, titleStyle, titleTint)
-            if (sub != null) {
-                val subStyle = ui(11.5f).let { if (subTabular) it.tabular() else it }
-                if (subWrap) CssLines(sub, subStyle, subColor ?: c.tx2, Modifier.padding(top = 1.dp))
-                else CssText(sub, subStyle, subColor ?: c.tx2, Modifier.padding(top = 1.dp))
+            Column(Modifier.weight(1f)) {
+                val titleStyle = ui(13.5f, FontWeight.Medium)
+                val titleTint = titleColor ?: if (selected) c.butterInk else c.tx
+                if (titleWrap) CssLines(title.breakAfterHyphens(), titleStyle, titleTint, maxLines = 2) else CssText(title, titleStyle, titleTint)
+                if (sub != null) {
+                    val subStyle = ui(11.5f).let { if (subTabular) it.tabular() else it }
+                    if (subWrap) CssLines(sub, subStyle, subColor ?: c.tx2, Modifier.padding(top = 1.dp))
+                    else CssText(sub, subStyle, subColor ?: c.tx2, Modifier.padding(top = 1.dp))
+                }
             }
+            trailing?.invoke(this)
         }
-        trailing?.invoke(this)
+        if (extra != null) {
+            // 主文的起点：行首图块 36 / 图标（[iconBox] 或 19）再加间距 10
+            val indent = when {
+                leading != null -> 46.dp
+                icon != null -> (iconBox ?: 19.dp) + 10.dp
+                else -> 0.dp
+            }
+            Box(Modifier.padding(start = indent)) { extra() }
+        }
     }
 }
 
@@ -343,7 +358,10 @@ fun Foot(text: String, modifier: Modifier = Modifier, side: Dp = 4.dp, top: Dp =
 // ---------------- .tile ----------------
 
 enum class TileTone {
-    Brown, Ol, Sage, Butter, Mint, Pink;
+    Brown, Ol, Sage, Butter, Mint, Pink,
+
+    /** 没启用的（仅代理时的 tailnet、仅 tailnet 时的代理）：`--sf3` 底、`--tx2` 图标。 */
+    Idle;
 
     fun colors(c: ShoalColors): Pair<Color, Color> = when (this) {
         Brown -> c.brown to c.brownInk
@@ -352,6 +370,7 @@ enum class TileTone {
         Butter -> c.butter to c.butterInk
         Mint -> c.mint to c.mintInk
         Pink -> c.pink to c.pinkInk
+        Idle -> c.sf3 to c.tx2
     }
 }
 
@@ -386,11 +405,13 @@ fun ShoalIconButton(
     tint: Color? = null,
     enabled: Boolean = true,
     spin: Boolean = false,
+    /** 圆的直径；状态卡里出口 IP 条上的复制钮用 30。 */
+    size: Dp = 40.dp,
 ) {
     val c = Shoal.colors
     Box(
         modifier
-            .size(40.dp)
+            .size(size)
             .clip(CircleShape)
             .pressHighlight(onClickLabel = label, enabled = enabled, role = Role.Button, highlight = c.sf2, behind = true, onClick = onClick)
             .semantics { contentDescription = label },

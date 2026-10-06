@@ -29,12 +29,17 @@ data class CoreState(
     val exit: String = "",
     /** 组数据（选中项或延迟）每变一次加 1，据此重新拉 Groups()。 */
     val groupsRev: Int = 0,
+    /** 内核本次启动用的连接模式；停止时为 null（设置里的当前值见 [ConnPrefs.mode]）。 */
+    val mode: ConnMode? = null,
 ) {
     val running get() = vpn == "running"
     val active get() = vpn == "running" || vpn == "starting"
 
-    /** tailnet 面板的数据此刻有意义：VPN 在跑且不是待登录。进入时拉取、离开时清空、写回前复查都用它。 */
-    val tailnetLive get() = running && tailnet != TAILNET_NEEDS_LOGIN
+    /** tailnet 面板的数据此刻有意义：VPN 在跑、开了 tailnet 且不是待登录。进入时拉取、离开时清空、写回前复查都用它。 */
+    val tailnetLive get() = running && mode != ConnMode.Proxy && tailnet != TAILNET_NEEDS_LOGIN
+
+    /** 出口此刻能用：VPN 在跑，并且不需要 tailnet（仅代理）或 tailnet 已 Running。 */
+    val exitReady get() = running && (mode == ConnMode.Proxy || tailnet == TAILNET_RUNNING)
 
     companion object {
         val STOPPED = CoreState("stopped", "NoState", emptyList(), "", "")
@@ -50,6 +55,7 @@ data class CoreState(
                 error = o.optString("error"),
                 exit = o.optString("exit"),
                 groupsRev = o.optInt("groupsRev"),
+                mode = ConnMode.fromKey(o.optString("mode")),
             )
         }.getOrElse {
             // 不记原文与异常信息：里面有完整登录链接，JSONException 的信息也会引用原文

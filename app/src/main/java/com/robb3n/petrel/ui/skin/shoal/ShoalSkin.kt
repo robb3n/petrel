@@ -41,7 +41,6 @@ import com.robb3n.petrel.ui.model.Tab
 import com.robb3n.petrel.ui.model.TailnetUi
 import com.robb3n.petrel.ui.pressScale
 import com.robb3n.petrel.ui.skin.CssText
-import com.robb3n.petrel.ui.skin.PetrelSkin
 import com.robb3n.petrel.ui.skin.TabPager
 import com.robb3n.petrel.ui.skin.tabCloseness
 import kotlin.math.ceil
@@ -49,15 +48,21 @@ import kotlin.math.floor
 import kotlin.math.round
 import kotlin.math.roundToInt
 
-/** Shoal：奶油浮岛 + 橄榄棕，默认皮肤。视觉真相源是 docs/spec/assets/ui-skins/src/{Main,ShoalNodes,ShoalTailnet}.dc.html。 */
-object ShoalSkin : PetrelSkin {
-    override fun pageColor(dark: Boolean): Int = (if (dark) ShoalDark else ShoalLight).wall.toArgb()
+/**
+ * Shoal：奶油浮岛 + 橄榄棕，App 唯一的皮肤（夜航、Tonal 已删）。视觉真相源见 docs/spec/skins.md §1。
+ * 只渲染 `ui/model` 的模型、调用 [PetrelActions]，不读 repository 或 CoreBridge。
+ */
+object ShoalSkin {
+    /** 窗口底色（ARGB）：`setContent` 之前按它设 window background，避免启动时闪别的颜色。 */
+    fun pageColor(dark: Boolean): Int = (if (dark) ShoalDark else ShoalLight).wall.toArgb()
 
+    /** token CompositionLocal + MaterialTheme colorScheme 映射。 */
     @Composable
-    override fun Theme(dark: Boolean, content: @Composable () -> Unit) = ShoalTheme(dark, content)
+    fun Theme(dark: Boolean, content: @Composable () -> Unit) = ShoalTheme(dark, content)
 
+    /** 底栏与 inset；[tabs] == null 是二级页（无底栏）。底栏的选中指示跟着 [TabPager.position] 走，点某项调 [TabPager.select]。 */
     @Composable
-    override fun Shell(tabs: TabPager?, content: @Composable () -> Unit) {
+    fun Shell(tabs: TabPager?, content: @Composable () -> Unit) {
         val c = Shoal.colors
         Box(Modifier.fillMaxSize().background(c.wall)) {
             content()
@@ -65,11 +70,11 @@ object ShoalSkin : PetrelSkin {
         }
     }
 
-    @Composable override fun Home(ui: HomeUi, a: PetrelActions) = ShoalHome(ui, a)
-    @Composable override fun Nodes(ui: NodesUi, a: PetrelActions) = ShoalNodes(ui, a)
-    @Composable override fun Tailnet(ui: TailnetUi, a: PetrelActions) = ShoalTailnet(ui, a)
-    @Composable override fun Config(ui: ConfigUi, a: PetrelActions) = ShoalConfig(ui, a)
-    @Composable override fun Settings(ui: SettingsUi, a: PetrelActions) = ShoalSettings(ui, a)
+    @Composable fun Home(ui: HomeUi, a: PetrelActions) = ShoalHome(ui, a)
+    @Composable fun Nodes(ui: NodesUi, a: PetrelActions) = ShoalNodes(ui, a)
+    @Composable fun Tailnet(ui: TailnetUi, a: PetrelActions) = ShoalTailnet(ui, a)
+    @Composable fun Config(ui: ConfigUi, a: PetrelActions) = ShoalConfig(ui, a)
+    @Composable fun Settings(ui: SettingsUi, a: PetrelActions) = ShoalSettings(ui, a)
 }
 
 private class NavItem(val tab: Tab, val label: String, val icon: @Composable (Boolean) -> androidx.compose.ui.graphics.vector.ImageVector)

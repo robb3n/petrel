@@ -81,7 +81,7 @@ class PetrelTileService : TileService() {
         tile.state = if (s.active) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
         tile.subtitle = when {
             s.vpn == "starting" -> "连接中"
-            s.running && s.tailnet == "NeedsLogin" -> "待登录"
+            s.running && s.mode != ConnMode.Proxy && s.tailnet == TAILNET_NEEDS_LOGIN -> "待登录"
             s.running -> "已连接"
             else -> "未连接"
         }

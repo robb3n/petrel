@@ -34,8 +34,6 @@ val OPEN_SOURCE_LICENSES: List<Pair<String, String>> = listOf(
     "tailscale / tsnet（metacubex fork）" to "BSD-3-Clause",
     "Rubik" to "SIL OFL 1.1",
     "Oswald" to "SIL OFL 1.1",
-    "Barlow Condensed" to "SIL OFL 1.1",
-    "IBM Plex Sans" to "SIL OFL 1.1",
     "IBM Plex Mono" to "SIL OFL 1.1",
     "Material Symbols" to "Apache-2.0",
 )

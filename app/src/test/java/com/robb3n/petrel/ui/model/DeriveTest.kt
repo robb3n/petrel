@@ -1,6 +1,10 @@
 package com.robb3n.petrel.ui.model
 
 import com.robb3n.petrel.ConfigInfo
+import com.robb3n.petrel.ConnMode
+import com.robb3n.petrel.CurrentExitIp
+import com.robb3n.petrel.ExitIpInfo
+import com.robb3n.petrel.ExitIpPlace
 import com.robb3n.petrel.CoreState
 import com.robb3n.petrel.GeoIpStatus
 import com.robb3n.petrel.ImportError
@@ -8,7 +12,6 @@ import com.robb3n.petrel.ImportUi
 import com.robb3n.petrel.PeerPath
 import com.robb3n.petrel.ProxyGroupUi
 import com.robb3n.petrel.ProxyUi
-import com.robb3n.petrel.Skin
 import com.robb3n.petrel.TailnetPeerUi
 import com.robb3n.petrel.TailnetSelfUi
 import com.robb3n.petrel.TailnetStatusUi
@@ -98,18 +101,6 @@ class DelayTest {
         assertEquals("182 ms", Delay(182).text)
     }
 
-    @Test fun signalBars() {
-        assertEquals(0, Delay(-1).bars)
-        assertEquals(0, Delay(0).bars)
-        assertEquals(4, Delay(99).bars)
-        assertEquals(3, Delay(100).bars)
-        assertEquals(3, Delay(199).bars)
-        assertEquals(2, Delay(200).bars)
-        assertEquals(2, Delay(399).bars)
-        assertEquals(1, Delay(400).bars)
-        assertEquals(1, Delay(5000).bars)
-    }
-
     @Test fun readoutSplitsNumberAndUnit() {
         assertEquals(DelayReadout("182", "ms", timeout = false, ReadoutTone.Normal), Delay(182).readout)
         assertEquals("1" to "ms", Delay(1).readout.let { it.value to it.unit })
@@ -140,12 +131,10 @@ class DelayTest {
         assertEquals("…", testing.text)
         assertEquals(Band.Idle, testing.band)
         assertEquals(DelayReadout("…", "", timeout = false, ReadoutTone.Idle), testing.readout)
-        assertEquals(0, testing.bars)
 
         val done = Delay(182).view(testing = false)
         assertEquals("182 ms", done.text)
         assertEquals(Band.Warn, done.band)
-        assertEquals(3, done.bars)
         assertEquals("182", done.readout.value)
     }
 }
@@ -200,38 +189,6 @@ class ChainTest {
     }
 }
 
-class RouteStationsTest {
-    private val front = "tc-u-se-ss-front"
-
-    @Test fun localThenEveryHopWithLabels() {
-        val chain = listOf(Hop("ts", HopRole.Tailnet), Hop(front, HopRole.Front), Hop("us-lax", HopRole.Exit))
-        assertEquals(
-            listOf(
-                Station("本机", null),
-                Station("tailnet", HopRole.Tailnet),
-                Station("前置", HopRole.Front),
-                Station("出口", HopRole.Exit),
-            ),
-            routeStations(chain),
-        )
-    }
-
-    @Test fun relayStationIsLabelled() {
-        assertEquals(
-            listOf(Station("本机", null), Station("中转", HopRole.Relay), Station("出口", HopRole.Exit)),
-            routeStations(listOf(Hop("relay", HopRole.Relay), Hop("tokyo", HopRole.Exit))),
-        )
-    }
-
-    @Test fun onlyTheExitIsTwoStations() {
-        assertEquals(listOf(Station("本机", null), Station("出口", HopRole.Exit)), routeStations(listOf(Hop("direct", HopRole.Exit))))
-    }
-
-    @Test fun noChainNoRoute() {
-        assertTrue(routeStations(emptyList()).isEmpty())
-    }
-}
-
 class NodesTest {
     @Test fun testLabelFollowsTesting() {
         assertEquals("测延迟", buildNodes(state(), emptyList(), testing = false).testLabel)
@@ -281,13 +238,10 @@ class NodesTest {
         assertEquals("手动选择 · 3 个节点", ui.groups[0].subtitle)
         val m = ui.groups[0].members
         assertEquals("经 front → ts · 当前出站", m[0].subtitle)
-        assertEquals("经 front → ts", m[0].via)
         assertTrue(m[0].selected)
         assertEquals("经 front → ts", m[1].subtitle)
-        assertEquals("经 front → ts", m[1].via)
         assertFalse(m[1].selected)
         assertNull(m[2].subtitle)
-        assertNull(m[2].via)
         assertEquals(
             listOf(
                 BaseNode("ts", true, "tailnet 第一跳 · Petrel 注入", NodeStatus("已连接", NodeStatusKind.Live)),
@@ -320,7 +274,6 @@ class NodesTest {
         val g = group(now = "plain", proxy("plain"))
         val m = buildNodes(state(), listOf(g), false).groups[0].members[0]
         assertEquals("当前出站", m.subtitle)
-        assertNull(m.via)
     }
 
     @Test fun notRunning() {
@@ -424,11 +377,9 @@ class HomeTest {
         assertEquals("PROXY · 手动选择 · 2 个节点", ui.chainSub)
         assertEquals(1, ui.tailnet!!.online)
         assertEquals("op12-petrel · 100.64.0.20", ui.tailnetSub)
-        assertEquals(TailnetCard("1/2 在线", "100.64.0.20"), ui.tailnetCard)
         assertEquals(TailnetEnd.Online(ui.tailnet!!), ui.tailnetEnd)
         assertEquals("10月2日", ui.config.dateShort)
         assertEquals("10月2日 00:00", ui.config.dateTime)
-        assertEquals("10-02", ui.config.dateNight)
         assertEquals("导入", ui.config.verb)
     }
 
@@ -451,7 +402,6 @@ class HomeTest {
         assertNull(ui.tailnet)
         assertEquals("op12-petrel · 等待批准", ui.tailnetSub)
         assertEquals(TailnetEnd.NeedsLogin, ui.tailnetEnd)
-        assertEquals(TailnetCard("待登录", "等待批准"), ui.tailnetCard)
     }
 
     @Test fun connectingHasNoChainNoStats() {
@@ -463,7 +413,6 @@ class HomeTest {
         assertNull(ui.groupName)
         assertNull(ui.chainSub)
         assertEquals("正在启动", ui.tailnetSub)
-        assertEquals(TailnetCard("—", "正在启动"), ui.tailnetCard)
         assertEquals(TailnetEnd.None, ui.tailnetEnd)
     }
 
@@ -473,7 +422,6 @@ class HomeTest {
         assertTrue(off.chain.isEmpty())
         assertEquals(Delay.UNKNOWN, off.exitDelay)
         assertEquals("未启动", off.tailnetSub)
-        assertEquals(TailnetCard("—", "未启动"), off.tailnetCard)
         val none = buildHome(CoreState.STOPPED, ConfigInfo(false, "config.yaml", 0, false), ImportUi(busy = true), emptyList(), null, HOST, zone = utc)
         assertEquals(ConnStatus.NoConfig, none.status)
         assertTrue(none.importing)
@@ -486,13 +434,11 @@ class HomeTest {
         assertEquals("op12-petrel · 100.64.0.20", ui.tailnetSub)
         assertEquals(TailnetEnd.None, ui.tailnetEnd)
         // 没有节点数据时大字是「—」、小字是 IP；不再从格式化好的副文字里抠
-        assertEquals(TailnetCard("—", "100.64.0.20"), ui.tailnetCard)
     }
 
     @Test fun runningWithoutIpFallsBackToHostname() {
         val ui = buildHome(state(ips = emptyList()), cfg, ImportUi(), groups, null, HOST, zone = utc)
         assertEquals("op12-petrel", ui.tailnetSub)
-        assertEquals(TailnetCard("—", "op12-petrel"), ui.tailnetCard)
     }
 
     @Test fun otherTailnetStateAndError() {
@@ -541,27 +487,13 @@ class HomeTest {
 
 private val sum56 = TailnetSummary(ip = null, online = 5, total = 6, direct = 0, relay = 0)
 
-class TailnetCardTest {
-    @Test fun countsAndText() {
-        assertEquals(TailnetCard("5/6 在线", "100.64.0.20"), tailnetCard("100.64.0.20", TailnetEnd.Online(sum56)))
-        assertEquals(TailnetCard("待登录", "等待批准"), tailnetCard("等待批准", TailnetEnd.NeedsLogin))
-        assertEquals(TailnetCard("Starting", "100.64.0.20"), tailnetCard("100.64.0.20", TailnetEnd.Other("Starting")))
-        assertEquals(TailnetCard("—", "未启动"), tailnetCard("未启动", TailnetEnd.None))
-    }
-}
-
 class EndViewTest {
-    @Test fun spacedVariantIsShoalsAndTightIsTheOthers() {
-        assertEquals(TailnetEndView("5 / 6 在线", EndTone.Ok), TailnetEnd.Online(sum56).view(spaced = true))
-        assertEquals(TailnetEndView("5/6 在线", EndTone.Ok), TailnetEnd.Online(sum56).view(spaced = false))
-    }
-
-    @Test fun otherEndsDoNotDependOnSpacing() {
-        for (spaced in listOf(true, false)) {
-            assertEquals(TailnetEndView(null, EndTone.Plain), TailnetEnd.None.view(spaced))
-            assertEquals(TailnetEndView("待登录", EndTone.Warn), TailnetEnd.NeedsLogin.view(spaced))
-            assertEquals(TailnetEndView("Starting", EndTone.Warn), TailnetEnd.Other("Starting").view(spaced))
-        }
+    @Test fun endViews() {
+        assertEquals(TailnetEndView("5 / 6 在线", EndTone.Ok), TailnetEnd.Online(sum56).view())
+        assertEquals(TailnetEndView(null, EndTone.Plain), TailnetEnd.None.view())
+        assertEquals(TailnetEndView("待登录", EndTone.Warn), TailnetEnd.NeedsLogin.view())
+        assertEquals(TailnetEndView("Starting", EndTone.Warn), TailnetEnd.Other("Starting").view())
+        assertEquals(TailnetEndView("未启用", EndTone.Plain), TailnetEnd.Disabled.view())
     }
 
     @Test fun summaryLabels() {
@@ -616,12 +548,10 @@ class ConfigUiTest {
     @Test fun stamps() {
         val s = configSummary(info, utc)
         assertEquals("10月2日导入", s.stampShort)
-        assertEquals("10-02 导入", s.stampNight)
         assertEquals("10月2日 00:00 导入", s.stampFull)
         // 没有配置时没有日期，也不能剩下孤零零的「更新」
         val none = configSummary(ConfigInfo(false, "config.yaml", 0, false), utc)
         assertEquals("", none.stampShort)
-        assertEquals("", none.stampNight)
         assertEquals("", none.stampFull)
     }
 
@@ -642,8 +572,8 @@ class ConfigUiTest {
 
     @Test fun settingsConfigRowWithoutConfig() {
         val none = ConfigInfo(false, "config.yaml", 0, false)
-        assertEquals("还没有配置", buildSettings(Skin.Shoal, listOf(Skin.Shoal), UiTone.Auto, "0.1.0", none).configName)
-        assertEquals("op12.local.yaml", buildSettings(Skin.Shoal, listOf(Skin.Shoal), UiTone.Auto, "0.1.0", info).configName)
+        assertEquals("还没有配置", buildSettings(ConnMode.Both, UiTone.Auto, ExitIpPlace.Card, "0.1.0", none).configName)
+        assertEquals("op12.local.yaml", buildSettings(ConnMode.Both, UiTone.Auto, ExitIpPlace.Card, "0.1.0", info).configName)
     }
 
     @Test fun geoText() {

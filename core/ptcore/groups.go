@@ -42,6 +42,8 @@ type proxyJSON struct {
 	// Relays 是 Chain 里由 petrel-via 标注出来的中转（不是 mihomo 节点）
 	Relays []string `json:"relays"`
 	Delay  int      `json:"delay"` // -1 没测过，0 失败 / 超时，其余为毫秒
+	// Addr 是节点的服务器地址（host:port），组、DIRECT 等没有地址的为空串。Kotlin 用「名字 + 地址」给记下的出口 IP 作键
+	Addr string `json:"addr"`
 }
 
 type groupJSON struct {
@@ -194,7 +196,7 @@ func pickProbes(cands []probeCandidate, force bool, now time.Time) []probeCandid
 func running() bool {
 	mu.Lock()
 	defer mu.Unlock()
-	return srv != nil && cur.VPN == "running"
+	return active && cur.VPN == "running"
 }
 
 func selectorGroup(p C.Proxy) (outboundgroup.ProxyGroup, bool) {
@@ -278,6 +280,7 @@ func snapshotGroups() []groupJSON {
 				Chain:  chain,
 				Relays: relays,
 				Delay:  memberDelay(m, url),
+				Addr:   m.Addr(),
 			})
 		}
 		out = append(out, gj)
@@ -385,6 +388,9 @@ func closeConnectionsThrough(group string) int {
 // 第一次拨号就在 warmFastDial 内连上时通路本来就是热的（热通路实测 40 到 90 ms），跳过稳定期，免得手动刷新白等三秒。
 // 失败不影响后续测速，只记数量；日志里不带地址（属于配置内容）。
 func warmTailnetHops() {
+	if currentMode() == ModeProxy {
+		return // ts 是占位节点，拨了也只是立即失败
+	}
 	all := tunnel.Proxies()
 	ts, ok := all[tsProxyName]
 	if !ok {

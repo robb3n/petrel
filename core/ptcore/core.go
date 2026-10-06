@@ -48,7 +48,28 @@ type state struct {
 	Exit string `json:"exit"`
 	// GroupsRev 在组数据（选中项或延迟）每变一次时加 1，Kotlin 据此重新拉 Groups()。每次 Start 从 0 开始。
 	GroupsRev int `json:"groupsRev"`
+	// Mode 是本次 Start 的连接模式（ModeBoth / ModeTailnet / ModeProxy），停止时为空串。
+	Mode string `json:"mode"`
 }
+
+// 连接模式，由 Kotlin 侧按设置里的两个开关传进 Start。
+const (
+	// ModeBoth：tailnet 与代理都开，tailnet 是代理链的第一跳（默认）。
+	ModeBoth = "both"
+	// ModeTailnet：只开 tailnet。不读用户配置，内核只把进了 TUN 的流量交给 ts；VpnService 只接管 tailnet 地址。
+	ModeTailnet = "tailnet"
+	// ModeProxy：只开代理，不起 tsnet。ts 换成连不上的占位节点，经它的节点立即失败。
+	ModeProxy = "proxy"
+)
+
+// tailnetDisabled 是 ModeProxy 下 state.Tailnet 的值。
+const tailnetDisabled = "Disabled"
+
+func validMode(m string) bool { return m == ModeBoth || m == ModeTailnet || m == ModeProxy }
+
+// tailnetOnlyConfig 是 ModeTailnet 交给 injectConfig 的「用户配置」：所有进了 TUN 的流量都走 ts。
+// VpnService 在这个模式下只路由 tailnet 地址，所以进来的只有发往 tailnet 的流量。
+var tailnetOnlyConfig = []byte("mode: rule\nlog-level: warning\nipv6: true\nrules:\n  - MATCH,ts\n")
 
 // 锁纪律：mu 只保护下面这些变量，持有 mu 时绝不调用 tsnet / mihomo / Host。
 // tailscale 会在持有内部锁时回调我们的 Logf，如果我们持有 mu 去调 tsnet、它又在 Logf 里等 mu，就会互相卡死。
@@ -60,6 +81,8 @@ var (
 
 	mu       sync.Mutex
 	srv      *tsnet.Server
+	// active：Start 成功走到起内核那一步之后为 true，teardown 置回 false。ModeProxy 没有 srv，「内核在不在」看它
+	active   bool
 	cancel   context.CancelFunc
 	cur      = state{VPN: "stopped", Tailnet: "NoState", TailnetIPs: []string{}}
 	netTimer *time.Timer
@@ -79,7 +102,8 @@ type hostBox struct{ h Host }
 // Start 起 tsnet 节点与 mihomo，tunFd 是 VpnService 交来的 TUN fd（所有权转给本包，成功后归 mihomo）。
 // hostname 是本机在 tailnet 里的节点名，由 Android 侧首次注册时生成并持久化（见 docs/lessons/network-change.md「节点名」）。
 // tsnet 立即启动，不等第一条连接；登录 URL 与状态经 Host.OnState 推出。
-func Start(homeDir string, configPath string, tunFd int, hostname string, h Host) (err error) {
+// mode 见 ModeBoth / ModeTailnet / ModeProxy；ModeTailnet 不读 configPath，ModeProxy 不起 tsnet（hostname 不用）。
+func Start(homeDir string, configPath string, tunFd int, hostname string, mode string, h Host) (err error) {
 	// 与 Stop 串行：停止后立刻再启动时，新的 Start 要等旧的 Stop 收完；两个 Start 也不会同时通过下面的 srv 检查
 	lifecycleMu.Lock()
 	defer lifecycleMu.Unlock()
@@ -93,12 +117,16 @@ func Start(homeDir string, configPath string, tunFd int, hostname string, h Host
 	}()
 
 	mu.Lock()
-	if srv != nil {
+	if active {
 		mu.Unlock()
 		return errors.New("already running")
 	}
 	host.Store(&hostBox{h})
-	cur = state{VPN: "starting", Tailnet: "NoState", TailnetIPs: []string{}}
+	cur = state{VPN: "starting", Tailnet: "NoState", TailnetIPs: []string{}, Mode: mode}
+	if mode == ModeProxy {
+		cur.Tailnet = tailnetDisabled
+	}
+	active = true
 	autoTested = false
 	autoTestDone = false
 	testingGroups = map[string]*testRun{}
@@ -112,7 +140,10 @@ func Start(homeDir string, configPath string, tunFd int, hostname string, h Host
 			resetAfterFailure(err)
 		}
 	}()
-	if strings.TrimSpace(hostname) == "" {
+	if !validMode(mode) {
+		return fmt.Errorf("unknown mode %q", mode)
+	}
+	if mode != ModeProxy && strings.TrimSpace(hostname) == "" {
 		return errors.New("empty tailnet hostname")
 	}
 
@@ -125,37 +156,27 @@ func Start(homeDir string, configPath string, tunFd int, hostname string, h Host
 		}
 	}
 
-	user, err := os.ReadFile(configPath)
-	if err != nil {
-		return fmt.Errorf("read config: %w", err)
-	}
-
-	s := &tsnet.Server{
-		Dir:       tsDir,
-		Hostname:  hostname,
-		Ephemeral: false,
-		Logf:      tsnetLogf,
-		// tsnet 经 UserLogf 打出「… or go to: <登录链接>」，链接只许走 watchTailnet 的 `tailnet login URL:` 那一行
-		UserLogf: func(format string, args ...any) {
-			logf("info", "tsnet: %s", redactLoginURLs(fmt.Sprintf(format, args...)))
-		},
-	}
-	mu.Lock()
-	srv = s
-	mu.Unlock()
-
-	socksAddr, socksPass, _, err := s.Loopback() // 内部会 Start tsnet
-	if err != nil {
-		return fmt.Errorf("start tailnet: %w", err)
+	user := tailnetOnlyConfig
+	if mode != ModeTailnet {
+		if user, err = os.ReadFile(configPath); err != nil {
+			return fmt.Errorf("read config: %w", err)
+		}
 	}
 
 	ctx, c := context.WithCancel(context.Background())
 	mu.Lock()
 	cancel = c
 	mu.Unlock()
-	go watchTailnet(ctx, s)
 	// 订阅要在 ApplyConfig 之前同步建立，否则启动期的日志（包括 TUN 建立失败）会丢
 	go forwardMihomoLogs(ctx, mlog.Subscribe())
+
+	// ModeProxy 不起 tsnet：ts 指向连不上的占位地址，经它的节点立即失败（不用等超时），配置里的 dialer-proxy: ts 照样解析得过
+	socksAddr, socksPass := placeholderSocks, "disabled"
+	if mode != ModeProxy {
+		if socksAddr, socksPass, err = startTailnet(ctx, tsDir, hostname); err != nil {
+			return err
+		}
+	}
 
 	fallbackSecret, err := randomSecret()
 	if err != nil {
@@ -192,6 +213,37 @@ func Start(homeDir string, configPath string, tunFd int, hostname string, h Host
 	publish()
 	maybeAutoTest()
 	return nil
+}
+
+// startTailnet 起本机的 tsnet 节点并开 Loopback SOCKS5，返回它的地址与口令；状态变化由 watchTailnet 推出。
+func startTailnet(ctx context.Context, tsDir string, hostname string) (socksAddr string, socksPass string, err error) {
+	s := &tsnet.Server{
+		Dir:       tsDir,
+		Hostname:  hostname,
+		Ephemeral: false,
+		Logf:      tsnetLogf,
+		// tsnet 经 UserLogf 打出「… or go to: <登录链接>」，链接只许走 watchTailnet 的 `tailnet login URL:` 那一行
+		UserLogf: func(format string, args ...any) {
+			logf("info", "tsnet: %s", redactLoginURLs(fmt.Sprintf(format, args...)))
+		},
+	}
+	mu.Lock()
+	srv = s
+	mu.Unlock()
+
+	socksAddr, socksPass, _, err = s.Loopback() // 内部会 Start tsnet
+	if err != nil {
+		return "", "", fmt.Errorf("start tailnet: %w", err)
+	}
+	go watchTailnet(ctx, s)
+	return socksAddr, socksPass, nil
+}
+
+// currentMode 返回本次 Start 的连接模式；没在运行时为空串。
+func currentMode() string {
+	mu.Lock()
+	defer mu.Unlock()
+	return cur.Mode
 }
 
 // resetAfterFailure 在 Start 失败、teardown 之后调用：与 Stop 一样整个复位，只留错误。
@@ -250,14 +302,15 @@ func randomSecret() (string, error) {
 func takeAutoTest() (gen int, ok bool) {
 	mu.Lock()
 	defer mu.Unlock()
-	if autoTested || cur.VPN != "running" || cur.Tailnet != ipn.Running.String() {
+	// ModeProxy 没有 tailnet，内核一起来就测；其余模式要等 tailnet Running，否则经 ts 的节点必然全部失败
+	if autoTested || cur.VPN != "running" || (cur.Mode != ModeProxy && cur.Tailnet != ipn.Running.String()) {
 		return 0, false
 	}
 	autoTested = true
 	return testGen, true
 }
 
-// maybeAutoTest 在 VPN 运行与 tailnet Running 第一次同时成立时，后台给所有组测一次延迟；每次 Start 只触发一次。
+// maybeAutoTest 在 VPN 运行与 tailnet Running 第一次同时成立时（ModeProxy 只看 VPN 运行），后台给所有组测一次延迟；每次 Start 只触发一次。
 // tailnet 没登录时测速必然全部失败，所以不在 VPN 一起来就测。Start 末尾与 watchTailnet 都要调用。
 // 测之前先预热 tailnet 第一跳（见 warmTailnetHops），否则第一轮结果里会带上 WireGuard 首次握手的几秒。
 func maybeAutoTest() {
@@ -298,6 +351,7 @@ func teardown() {
 	mu.Lock()
 	s, c := srv, cancel
 	srv, cancel = nil, nil
+	active = false
 	if netTimer != nil {
 		netTimer.Stop()
 		netTimer = nil
@@ -343,12 +397,12 @@ func StartLogin() error {
 	return lc.StartLoginInteractive(ctx)
 }
 
-// NotifyNetworkChanged 由 Android 的默认网络回调调用；去抖 1 秒后唤醒 tsnet 的网络监视器。
+// NotifyNetworkChanged 由 Android 的默认网络回调调用；去抖 1 秒后唤醒 tsnet 的网络监视器（ModeProxy 没有 tsnet，只做切网后探测）。
 // tailscale 的 netmon 在 Android 上 10 分钟才轮询一次，靠系统侧主动通知；不通知的话切网后迟迟不恢复。
 func NotifyNetworkChanged() {
 	mu.Lock()
 	defer mu.Unlock()
-	if srv == nil {
+	if !active {
 		return
 	}
 	if netTimer != nil {
@@ -361,9 +415,13 @@ func NotifyNetworkChanged() {
 // 没用 LocalClient.DebugAction("rebind")：metacubex/tailscale 裁掉了 localapi 的 debug 处理，该调用会失败。
 func injectLinkChange() {
 	mu.Lock()
-	s := srv
+	s, on := srv, active
 	mu.Unlock()
-	if s == nil {
+	if !on {
+		return
+	}
+	if s == nil { // ModeProxy
+		go probeAfterNetworkChange()
 		return
 	}
 	mon, ok := s.Sys().NetMon.GetOK()

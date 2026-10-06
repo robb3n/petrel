@@ -1,12 +1,13 @@
 package com.robb3n.petrel.ui.model
 
+import com.robb3n.petrel.ConnMode
+import com.robb3n.petrel.ExitIpPlace
 import com.robb3n.petrel.ImportError
-import com.robb3n.petrel.Skin
 import com.robb3n.petrel.UiTone
 
 /*
- * 皮肤无关的界面模型（docs/spec/skins.md §2.2）。三套皮肤显示同一份数据：推导在 Derive.kt 里做一次，
- * 皮肤包只渲染这里的类型、调用 [PetrelActions]，不读 repository 与 CoreBridge。
+ * 界面模型（docs/spec/skins.md §2.2）：推导在 Derive.kt 里做一次（纯函数、有 JVM 单测），
+ * 皮肤包（ui/skin/shoal）只渲染这里的类型、调用 [PetrelActions]，不读 repository 与 CoreBridge。
  */
 
 /** 一级标签；二级页（配置、设置）没有标签，壳传 null。 */
@@ -23,37 +24,56 @@ sealed interface ConnStatus {
 
     /** VPN 在跑、tailnet 既不是 Running 也不是 NeedsLogin：「已连接 / tailnet <state>」，留意色。 */
     data class TailnetOther(val state: String) : ConnStatus
+
+    /** 仅代理模式下，当前出口的链路要经过 tailnet（`ts`）：VPN 在跑，但出口用不了。留意色。 */
+    data object ExitNeedsTailnet : ConnStatus
 }
 
-/** 连接状态的着色档，三套皮肤各自映射到自己的状态灯 / 标签样式。 */
+/** 连接状态的着色档，皮肤映射到自己的标签样式。 */
 enum class StatusTone { Idle, Busy, Warn, Live }
 
 val ConnStatus.tone: StatusTone
     get() = when (this) {
         ConnStatus.NoConfig, ConnStatus.Off -> StatusTone.Idle
         ConnStatus.Connecting -> StatusTone.Busy
-        ConnStatus.NeedsLogin, is ConnStatus.TailnetOther -> StatusTone.Warn
+        ConnStatus.NeedsLogin, is ConnStatus.TailnetOther, ConnStatus.ExitNeedsTailnet -> StatusTone.Warn
         ConnStatus.Connected -> StatusTone.Live
     }
 
-/** 状态区主文字（三套皮肤一致）。 */
+/** 状态区主文字。 */
 val ConnStatus.label: String
     get() = when (this) {
         ConnStatus.NoConfig, ConnStatus.Off -> "未连接"
         ConnStatus.Connecting -> "连接中"
         ConnStatus.NeedsLogin -> "待登录"
-        ConnStatus.Connected, is ConnStatus.TailnetOther -> "已连接"
+        ConnStatus.Connected, is ConnStatus.TailnetOther, ConnStatus.ExitNeedsTailnet -> "已连接"
     }
 
-/** 状态区副文字；Off 的提示各皮肤措辞不同，由皮肤传入（Shoal「点右边的开关，或用状态栏快捷开关」）。 */
-fun ConnStatus.sub(offHint: String): String = when (this) {
+/** 标题旁的状态标签：同 [label]，只有出口用不了时写「出口不可用」。 */
+val ConnStatus.tagLabel: String
+    get() = if (this == ConnStatus.ExitNeedsTailnet) "出口不可用" else label
+
+/** 状态区副文字，随连接模式变。 */
+fun ConnStatus.sub(offHint: String = OFF_HINT, mode: ConnMode = ConnMode.Both): String = when (this) {
     ConnStatus.NoConfig -> "还没有配置。导入一份 mihomo YAML 就能连接。"
     ConnStatus.Off -> offHint
-    ConnStatus.Connecting -> "正在启动 tailnet 与代理"
-    ConnStatus.NeedsLogin -> "登录 tailnet 之后代理才能用"
-    ConnStatus.Connected -> "代理与 tailnet 都已就绪"
+    ConnStatus.Connecting -> when (mode) {
+        ConnMode.Both -> "正在启动 tailnet 与代理"
+        ConnMode.Tailnet -> "正在启动 tailnet"
+        ConnMode.Proxy -> "正在启动代理"
+    }
+    ConnStatus.NeedsLogin -> if (mode == ConnMode.Tailnet) "登录之后才能访问 tailnet" else "登录 tailnet 之后代理才能用"
+    ConnStatus.Connected -> when (mode) {
+        ConnMode.Both -> "代理与 tailnet 都已就绪"
+        ConnMode.Tailnet -> "仅 tailnet · 其它流量直接走手机网络"
+        ConnMode.Proxy -> "仅代理 · tailnet 未启用"
+    }
     is ConnStatus.TailnetOther -> "tailnet $state"
+    ConnStatus.ExitNeedsTailnet -> "仅代理 · 当前出口要经过 tailnet，现在用不了"
 }
+
+/** 未连接时的提示。 */
+const val OFF_HINT = "点右边的开关，或用状态栏快捷开关"
 
 /** 延迟 / 路径的着色档。 */
 enum class Band { Ok, Warn, Bad, Idle }
@@ -80,22 +100,11 @@ value class Delay(val ms: Int) {
             else -> "$ms ms"
         }
 
-    /** 夜航的信号格，共 4 格。 */
-    val bars: Int
-        get() = when {
-            ms <= 0 -> 0
-            ms < 100 -> 4
-            ms < 200 -> 3
-            ms < 400 -> 2
-            else -> 1
-        }
-
-    /** 大数字读数（数字与单位分开排）：夜航的出口读数与节点行、Shoal 的出口延迟格。 */
+    /** 大数字读数（数字与单位分开排）：连接页的出口延迟格。 */
     val readout: DelayReadout
         get() = when {
             ms < 0 -> DelayReadout("—", "", timeout = false, ReadoutTone.Idle)
             ms == 0 -> DelayReadout("超时", "", timeout = true, ReadoutTone.Bad)
-            // 夜航 spec §2.6：只有 Bad 档的数字用 --err，其余档沿用画稿的 --ink
             band == Band.Bad -> DelayReadout("$ms", "ms", timeout = false, ReadoutTone.Bad)
             else -> DelayReadout("$ms", "ms", timeout = false, ReadoutTone.Normal)
         }
@@ -110,21 +119,22 @@ enum class ReadoutTone { Idle, Normal, Bad }
 
 /**
  * 大数字读数：[value] 是数字或「超时」「—」「…」，[unit] 只有数字才有（「ms」）。
- * [timeout] 供皮肤给汉字换小一点的字号（Barlow 的字号放不下「超时」）。
+ * [timeout] 表示值是汉字「超时」。
  */
 data class DelayReadout(val value: String, val unit: String, val timeout: Boolean, val tone: ReadoutTone) {
     /** 值是带单位的数字。 */
     val numeric: Boolean get() = unit.isNotEmpty()
 }
 
-/**
- * 延迟的显示：测速中三套都显示「…」并用 Idle 样式。[bars] 是夜航信号格数（测速中 0），[readout] 是大数字读数。
- */
-data class DelayView(val text: String, val band: Band, val readout: DelayReadout, val bars: Int)
+/** 延迟的显示：测速中显示「…」并用 Idle 样式；[readout] 是大数字读数。 */
+data class DelayView(val text: String, val band: Band, val readout: DelayReadout)
 
 fun Delay.view(testing: Boolean): DelayView =
-    if (testing) DelayView("…", Band.Idle, DelayReadout("…", "", timeout = false, ReadoutTone.Idle), 0)
-    else DelayView(text, band, readout, bars)
+    if (testing) DelayView("…", Band.Idle, DelayReadout("…", "", timeout = false, ReadoutTone.Idle))
+    else DelayView(text, band, readout)
+
+/** 出口要经过没开的 tailnet：徽章写「不可用」，读数是「—」。 */
+val UNAVAILABLE_DELAY = DelayView("不可用", Band.Bad, DelayReadout("—", "", timeout = false, ReadoutTone.Idle))
 
 enum class HopRole { Tailnet, Front, Relay, Exit }
 
@@ -138,38 +148,24 @@ fun HopRole.caption(group: String, detailed: Boolean = false): String = when (th
 
 internal const val TS_CAPTION_DETAILED = "tailnet 第一跳 · Petrel 注入"
 
-data class Hop(val name: String, val role: HopRole)
+/** [blocked]：这一跳是 `ts`、而 tailnet 没开（仅代理模式）。 */
+data class Hop(val name: String, val role: HopRole, val blocked: Boolean = false)
 
-/** 夜航航线图的一个站点：本机（[role] 为 null）或某一跳；[label] 是图上的标签。 */
-data class Station(val label: String, val role: HopRole?)
+/** 仅代理模式下 `ts` 那一跳的说明。 */
+internal const val TS_CAPTION_DISABLED = "tailnet 第一跳 · 仅代理模式下未启用"
 
-/** 航线图的站点 = 本机 + 每一跳，标签：本机 / tailnet / 前置 / 出口。链路为空时没有航线。 */
-fun routeStations(chain: List<Hop>): List<Station> =
-    if (chain.isEmpty()) {
-        emptyList()
-    } else {
-        listOf(Station("本机", null)) + chain.map {
-            Station(
-                when (it.role) {
-                    HopRole.Tailnet -> "tailnet"
-                    HopRole.Front -> "前置"
-                    HopRole.Relay -> "中转"
-                    HopRole.Exit -> "出口"
-                },
-                it.role,
-            )
-        }
-    }
+/** 链路卡里一跳的说明（[HopRole.caption] 的详细措辞；没开的 `ts` 另写）。 */
+fun Hop.caption(group: String): String = if (blocked) TS_CAPTION_DISABLED else role.caption(group, detailed = true)
 
 /** 本机在 tailnet 里的摘要：IPv4、在线数、总数、直连数、中继数。 */
 data class TailnetSummary(val ip: String?, val online: Int, val total: Int, val direct: Int, val relay: Int) {
-    /** `5/6`（Shoal 的统计格、Tonal 的 chip）。 */
+    /** `5/6`（统计格）。 */
     val ratio: String get() = "$online/$total"
 
     /** `5 / 6`（Shoal 的读数格）。 */
     val ratioSpaced: String get() = "$online / $total"
 
-    /** `5 / 6 在线`（三套皮肤的节点列表标题）。 */
+    /** `5 / 6 在线`（连接页 tailnet 行、tailnet 页的节点列表标题）。 */
     val onlineLabel: String get() = "$ratioSpaced 在线"
 
     /** `直连 3 · 中继 1`（Shoal 的读数格）。 */
@@ -182,22 +178,26 @@ sealed interface TailnetEnd {
     data class Online(val summary: TailnetSummary) : TailnetEnd
     data object NeedsLogin : TailnetEnd
     data class Other(val state: String) : TailnetEnd
+
+    /** 仅代理：tailnet 没开。 */
+    data object Disabled : TailnetEnd
 }
 
 enum class EndTone { Plain, Ok, Warn }
 
-/** [TailnetEnd] 的读数：[text] 为 null 表示没有值（Shoal 不画，其它皮肤写「—」）。 */
+/** [TailnetEnd] 的读数：[text] 为 null 表示没有值（不画）。 */
 data class TailnetEndView(val text: String?, val tone: EndTone)
 
-/** [spaced] = true 写 `5 / 6 在线`（Shoal 画稿），否则 `5/6 在线`（夜航、Tonal）。 */
-fun TailnetEnd.view(spaced: Boolean): TailnetEndView = when (this) {
+/** `5 / 6 在线`、`待登录`、tailnet 状态原文、`未启用`。 */
+fun TailnetEnd.view(): TailnetEndView = when (this) {
     TailnetEnd.None -> TailnetEndView(null, EndTone.Plain)
-    is TailnetEnd.Online -> TailnetEndView(if (spaced) summary.onlineLabel else "${summary.ratio} 在线", EndTone.Ok)
+    is TailnetEnd.Online -> TailnetEndView(summary.onlineLabel, EndTone.Ok)
     TailnetEnd.NeedsLogin -> TailnetEndView("待登录", EndTone.Warn)
     is TailnetEnd.Other -> TailnetEndView(state, EndTone.Warn)
+    TailnetEnd.Disabled -> TailnetEndView("未启用", EndTone.Plain)
 }
 
-/** 配置摘要。日期三种写法按皮肤取：Shoal / Tonal 用 [dateShort]，夜航用 [dateNight]，配置页用 [dateTime]。 */
+/** 配置摘要。日期两种写法：连接页用 [dateShort]，配置页用 [dateTime]。 */
 data class ConfigSummary(
     val present: Boolean,
     val name: String,
@@ -208,21 +208,49 @@ data class ConfigSummary(
     val dateShort: String,
     /** `M月d日 HH:mm` */
     val dateTime: String,
-    /** `MM-dd` */
-    val dateNight: String,
 ) {
-    /** `10月3日导入`（Shoal 与 Tonal 的连接页）；没有配置时为空串。 */
+    /** `10月3日导入`（连接页）；没有配置时为空串。 */
     val stampShort: String get() = if (present) "$dateShort$verb" else ""
-
-    /** `10-03 导入`（夜航的连接页）；没有配置时为空串。 */
-    val stampNight: String get() = if (present) "$dateNight $verb" else ""
 
     /** `10月3日 17:29 导入`（配置页）；没有配置时为空串。 */
     val stampFull: String get() = if (present) "$dateTime $verb" else ""
 }
 
-/** Tonal 连接页 tailnet 色调卡的两行：大字与小字（画稿 `.tc .v` / `.tc .d`）。 */
-data class TailnetCard(val value: String, val detail: String)
+/** 统计格的数字颜色（画稿 `.stat.s0 / .s2 / .s3`）。 */
+enum class StatSlot { S0, S2, S3 }
+
+/** 状态卡里的一个统计格：[value] 是数字或「—」，[unit] 只有延迟才有；点了进 [target] 标签。 */
+data class StatUi(val value: String, val unit: String, val key: String, val slot: StatSlot, val target: Tab)
+
+/** IP 类型：ip-api 的 hosting / mobile。 */
+enum class IpKind(val label: String) { Hosting("机房"), Residential("住宅"), Mobile("移动网络") }
+
+/**
+ * 一个出口 IP 的各种写法，推导一次，连接页三种摆法与节点页共用。
+ * [short]「美国 · 洛杉矶」，[location]「美国 · 加利福尼亚州 · 洛杉矶」，[isp]「NTT America, Inc. · AS2914」，
+ * [line]「203.0.113.42 · 洛杉矶 · NTT America」（链路末跳、节点页）。
+ */
+data class IpView(
+    val ip: String,
+    /** 国家代码（「US」）；没有时「?」。 */
+    val cc: String,
+    val short: String,
+    val location: String,
+    val isp: String,
+    val kind: IpKind,
+    val line: String,
+)
+
+/** 连接页的出口 IP。 */
+sealed interface ExitIpUi {
+    /** [refreshing]：正在重查，先显示上次记下的。 */
+    data class Ready(val ip: IpView, val refreshing: Boolean) : ExitIpUi
+
+    data object Loading : ExitIpUi
+
+    /** 查不到：[hint] 说明原因或下一步。 */
+    data class Unavailable(val hint: String) : ExitIpUi
+}
 
 data class HomeUi(
     val status: ConnStatus,
@@ -232,6 +260,18 @@ data class HomeUi(
     val chain: List<Hop>,
     /** 出口延迟；待登录、未运行时是 [Delay.UNKNOWN]（显示「—」）。 */
     val exitDelay: Delay,
+    /** 本次（或将要）连接的模式。 */
+    val mode: ConnMode,
+    /** 状态区副文字（随模式变）。 */
+    val statusSub: String,
+    /** 状态卡里的统计格；没有配置时为空。 */
+    val stats: List<StatUi>,
+    /** 连接页的出口 IP；null = 不显示（没在跑、出口还没就绪、没有代理组）。 */
+    val exitIp: ExitIpUi?,
+    /** 出口 IP 的摆法；链路卡不显示时「链路末跳」退回独立卡片。 */
+    val exitIpPlace: ExitIpPlace,
+    /** 出口 IP 是手机自己的网络（仅 tailnet，不经代理）。 */
+    val exitIpDirect: Boolean,
     val groupName: String?,
     /** 第一个 select 组的成员数；未运行或没有组时为 null。 */
     val groupSize: Int?,
@@ -242,16 +282,21 @@ data class HomeUi(
     /** 顶栏刷新按钮：VPN 在跑时可用；[refreshing] 时图标转圈、不能再点（与节点页的「测速中」同一个状态）。 */
     val canRefresh: Boolean,
     val refreshing: Boolean,
-    /** tailnet 行的副文字：「pjd110-petrel · 100.64.0.20」。 */
+    /** tailnet 行的副文字：「pjd110-petrel · 100.64.0.20」；仅代理时「仅代理模式下未启用」。 */
     val tailnetSub: String,
     val tailnetEnd: TailnetEnd,
-    /** Tonal 的 tailnet 色调卡：大字与小字。 */
-    val tailnetCard: TailnetCard,
     val config: ConfigSummary,
     val importing: Boolean,
 ) {
-    /** 出口延迟的显示：刷新中（与节点页的「测速中」同一个状态）显示「…」并用 Idle 样式，spec §2.7。 */
-    val exitView: DelayView get() = exitDelay.view(refreshing)
+    /** 出口延迟的显示：刷新中（与节点页的「测速中」同一个状态）显示「…」并用 Idle 样式；出口用不了时「不可用」。 */
+    val exitView: DelayView
+        get() = if (status == ConnStatus.ExitNeedsTailnet) UNAVAILABLE_DELAY else exitDelay.view(refreshing)
+
+    /** tailnet 行变淡（仅代理）。 */
+    val tailnetDisabled: Boolean get() = !mode.tailnetOn
+
+    /** 仅 tailnet 时多一行「代理 · 未启用」。 */
+    val proxyDisabled: Boolean get() = !mode.proxyOn
 
     /** 「导入 YAML…」按钮（没有配置时的首页）。 */
     val importLabel: String get() = importButtonLabel(importing)
@@ -260,15 +305,29 @@ data class HomeUi(
 /** 导入按钮的文字：校验中「校验中…」，否则「导入 YAML…」。首页与配置页共用。 */
 fun importButtonLabel(busy: Boolean): String = if (busy) "校验中…" else "导入 YAML…"
 
+/** 节点行的出口 IP。 */
+sealed interface NodeIp {
+    /** 没有服务器地址（组、DIRECT），不记。 */
+    data object None : NodeIp
+
+    data class Known(val ip: IpView) : NodeIp
+
+    /** 还没记下：[text] 是「还没记下出口 IP，测延迟时补上」或补查中的「查询出口 IP…」。 */
+    data class Missing(val text: String) : NodeIp
+}
+
 data class NodeItem(
     val name: String,
-    /** 「经 a → b」，选中项再加「 · 当前出站」；没有内容时为 null。 */
+    /** 「经 a → b」，选中项再加「 · 当前出站」，用不了时加「 · 仅代理模式下不可用」；没有内容时为 null。 */
     val subtitle: String?,
-    /** 只有「经 a → b」（DIRECT 写「直连」），不带「当前出站」；Tonal 画稿选中项也不带。没有内容时为 null。 */
-    val via: String?,
     val delay: Delay,
     val selected: Boolean,
-)
+    /** 链路经过没开的 tailnet（仅代理）：变淡、不能选、延迟写「不可用」。 */
+    val blocked: Boolean = false,
+    val ip: NodeIp = NodeIp.None,
+) {
+    fun delayView(testing: Boolean): DelayView = if (blocked) UNAVAILABLE_DELAY else delay.view(testing)
+}
 
 data class NodeGroup(
     val name: String,
@@ -284,7 +343,8 @@ enum class NodeStatusKind { Live, Warn, Idle }
 data class NodeStatus(val text: String, val kind: NodeStatusKind)
 
 /** 链路底座：出现在 chain 里、但不是任何组成员的节点（含 `petrel-via` 标注的中转）。[status] 只有 `ts` 有。 */
-data class BaseNode(val name: String, val isTs: Boolean, val caption: String, val status: NodeStatus?)
+/** [disabled]：`ts` 而 tailnet 没开（仅代理），图标变灰。 */
+data class BaseNode(val name: String, val isTs: Boolean, val caption: String, val status: NodeStatus?, val disabled: Boolean = false)
 
 data class NodesUi(
     val running: Boolean,
@@ -313,6 +373,9 @@ data class PeerUi(
 sealed interface TailnetUi {
     /** VPN 没起。 */
     data object NotActive : TailnetUi
+
+    /** 仅代理：tailnet 没开。 */
+    data object Disabled : TailnetUi
 
     /** [hostname] 是本机在 tailnet 里的节点名，待批准的那一行显示它。 */
     data class NeedsLogin(val loginURL: String, val hostname: String) : TailnetUi {
@@ -377,14 +440,21 @@ data class ConfigUi(
 }
 
 data class SettingsUi(
-    val skin: Skin,
-    /** 已实现的皮肤；只有一套时界面不显示「皮肤」行。 */
-    val skins: List<Skin>,
+    val mode: ConnMode,
     val tone: UiTone,
+    val exitIpPlace: ExitIpPlace,
     val versionName: String,
     /** 「配置」行的副标题：当前文件名；没有配置时「还没有配置」。 */
     val configName: String,
 )
+
+/** 设置页「连接」浮岛下的说明：随两个开关的组合变。 */
+val ConnMode.settingsDesc: String
+    get() = when (this) {
+        ConnMode.Both -> "两个都开（默认）：tailnet 是代理链的第一跳，全部流量按配置分流。"
+        ConnMode.Tailnet -> "只开 tailnet：只接管 tailnet 地址，其它流量完全不经过 VPN。至少要开一个。"
+        ConnMode.Proxy -> "只开代理：不启动 tailnet，配置里经过 ts 的节点这时不可用。至少要开一个。"
+    }
 
 /** 皮肤能调用的全部动作。皮肤包里不得直接碰 repository / CoreBridge。 */
 class PetrelActions(
@@ -399,8 +469,12 @@ class PetrelActions(
     val openLogin: () -> Unit,
     val copyLogin: () -> Unit,
     val copyAddress: (ip: String) -> Unit,
-    val setSkin: (Skin) -> Unit,
+    val copyExitIp: (ip: String) -> Unit,
     val setTone: (UiTone) -> Unit,
+    val setExitIpPlace: (ExitIpPlace) -> Unit,
+    /** 设置里的两个开关；关掉最后一个开着的不生效。VPN 开着时会重连一次。 */
+    val setTailnetOn: (Boolean) -> Unit,
+    val setProxyOn: (Boolean) -> Unit,
     val openNodes: () -> Unit,
     val openTailnet: () -> Unit,
     val openConfig: () -> Unit,

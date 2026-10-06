@@ -106,21 +106,19 @@ class PetrelVpnService : VpnService() {
             CoreBridge.onState(Ptcore.status()) // 入口可能已经把状态改成「连接中」，这里按内核的真实状态补推一次
             return
         }
+        // 每次启动读一次设置里的连接模式；VPN 开着时改了开关，设置页会让服务重启（RESTART 也走这里）
+        val mode = ConnPrefs.mode.value
         val config = File(filesDir, ConfigRepository.CONFIG_FILE)
-        if (!config.exists()) {
+        // 仅 tailnet 不读配置：内核用内置的「全部交给 ts」
+        if (mode != ConnMode.Tailnet && !config.exists()) {
             failAndStop("未找到配置：${config.path}", startId)
             return
         }
-        // 配置关了 IPv6 就不接管：VpnService 对没有地址和路由的地址族一律拦截（不泄漏），App 立刻得到不可达并退回 IPv4。
-        // 收进 TUN 反而坏事：mihomo 拨不出 IPv6，App 看到的是连上又断，不会退回。见 docs/lessons/vpn-tun-stack.md
-        val ipv6 = Ptcore.configIPv6(config.absolutePath)
         val pfd: ParcelFileDescriptor? = try {
             Builder()
                 .setSession(getString(R.string.app_name))
                 .addAddress("172.19.0.1", 30)
-                .addRoute("0.0.0.0", 0)
-                .apply { if (ipv6) addAddress("fdfe:dcba:9876::1", 126).addRoute("::", 0) }
-                .addDnsServer("172.19.0.2")
+                .apply { if (mode == ConnMode.Tailnet) tailnetRoutes() else fullRoutes(config) }
                 .setMtu(1400)
                 .addDisallowedApplication(packageName)
                 .setUnderlyingNetworks(null)
@@ -140,7 +138,7 @@ class PetrelVpnService : VpnService() {
         }
         val fd = pfd.detachFd()
         try {
-            Ptcore.start(filesDir.absolutePath, config.absolutePath, fd.toLong(), TailnetHostname.get(this), CoreBridge)
+            Ptcore.start(filesDir.absolutePath, config.absolutePath, fd.toLong(), TailnetHostname.get(this), mode.key, CoreBridge)
         } catch (e: Exception) {
             // fd 已交给 Go：失败时由 Go 侧关闭或交 mihomo 清理，这里不再碰它，免得重复关闭误伤被复用的编号。
             // Go 的错误形如「parse config: <mihomo 的解析错误>」，后半段可能带配置行与凭据：日志只记我们自己加的前缀
@@ -158,6 +156,26 @@ class PetrelVpnService : VpnService() {
             return
         }
         Log.i(TAG, "vpn started")
+    }
+
+    /** tailnet + 代理、仅代理：接管全部流量，DNS 也交给内核。 */
+    private fun Builder.fullRoutes(config: File) {
+        // 配置关了 IPv6 就不接管：VpnService 对没有地址和路由的地址族一律拦截（不泄漏），App 立刻得到不可达并退回 IPv4。
+        // 收进 TUN 反而坏事：mihomo 拨不出 IPv6，App 看到的是连上又断，不会退回。见 docs/lessons/vpn-tun-stack.md
+        val ipv6 = Ptcore.configIPv6(config.absolutePath)
+        addRoute("0.0.0.0", 0)
+        if (ipv6) addAddress("fdfe:dcba:9876::1", 126).addRoute("::", 0)
+        addDnsServer("172.19.0.2")
+    }
+
+    /**
+     * 仅 tailnet：只路由 tailnet 地址（CGNAT 段与 tailnet 的 IPv6 ULA），其它流量和 DNS 都不进 VPN，同官方 App。
+     * IPv6 也要给地址：没有地址的地址族会被 VpnService 整族拦截，手机上所有 IPv6 就断了（见 Builder.allowFamily）。
+     */
+    private fun Builder.tailnetRoutes() {
+        addRoute("100.64.0.0", 10)
+        addAddress("fdfe:dcba:9876::1", 126)
+        addRoute("fd7a:115c:a1e0::", 48)
     }
 
     /** 停内核：注销网络回调、关 mihomo 与 tsnet。旧 TUN fd 由 Ptcore.stop() 经 mihomo 关闭，Kotlin 不碰。 */
@@ -228,6 +246,7 @@ class PetrelVpnService : VpnService() {
                 }
                 // 不在系统的回调线程里同步调 Go：内核一旦卡住，会堵死整个进程的网络回调
                 worker.execute { Ptcore.notifyNetworkChanged() }
+                ExitIpRepository.networkChanged()
             }
         }
         val request = NetworkRequest.Builder()

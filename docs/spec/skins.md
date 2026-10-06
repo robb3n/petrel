@@ -1,5 +1,7 @@
 # Spec — Petrel 三套皮肤（Shoal / 夜航 / Tonal）
 
+> **2026-10-06 更新：夜航、Tonal 已删，只留 Shoal**（人在对话里定）。下文写到夜航、Tonal 的部分只是历史记录，它们的画稿副本已从仓库删掉（git 历史里还有）。Shoal 的部分仍然有效。设置页的「皮肤」行已经去掉；连接模式与出口 IP 见 `docs/spec/conn-mode.md`。
+
 > 定稿 2026-10-03。**视觉真相源是画稿**（§1）：字形、颜色与 token、图标、控件的位置与排列、间距、各状态的样子，一律以画稿为准。本文件只管行为、数据、交互逻辑，以及画稿没画到的部分。本文与画稿在视觉细节上冲突时以画稿为准，并在 check 复述里指出来。
 >
 > anvil 主题 `petrel:skins`，分 3 条任务按顺序做（§3）。本文取代 `docs/spec/v1.md` 里的「视觉真相源」「颜色 token」「字体」「图标」「导航结构」各节；v1.md 的产品决定、行为细节与「画稿没画到的部分」中的行为条目仍然有效，除非本文另有规定。
@@ -27,8 +29,6 @@
 | Shoal | 连接 | `Main.dc.html` | `ShoalHome` |
 | Shoal | 节点 | `ShoalNodes.dc.html` | `ShoalNodes` |
 | Shoal | tailnet | `ShoalTailnet.dc.html` | `ShoalTailnet` |
-| 夜航 | 连接 / 节点 / tailnet | `NightHome` / `NightNodes` / `NightTailnet.dc.html` | 同名 |
-| Tonal | 连接 / 节点 / tailnet | `TonalHome` / `TonalNodes` / `TonalTailnet.dc.html` | 同名 |
 
 - **单位**：CSS px = dp，字号 px = sp。画稿没画系统状态栏和手势条：顶部留白 = 状态栏 inset + 画稿 header；底部同理加手势条 inset（App 走 edge-to-edge）。
 - **示意数据**：IP（`100.64.0.x`）、延迟、节点名、离线节点 `op12`、tailnet 设备图标都是示意，实际内容来自内核。

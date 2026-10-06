@@ -25,8 +25,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.robb3n.petrel.BuildConfig
 import com.robb3n.petrel.ConfigRepository
+import com.robb3n.petrel.ConnPrefs
 import com.robb3n.petrel.CoreBridge
+import com.robb3n.petrel.ExitIpRepository
 import com.robb3n.petrel.GroupsRepository
+import com.robb3n.petrel.PetrelVpnService
 import com.robb3n.petrel.TailnetHostname
 import com.robb3n.petrel.TailnetRepository
 import com.robb3n.petrel.UiPrefs
@@ -38,9 +41,8 @@ import com.robb3n.petrel.ui.model.buildHome
 import com.robb3n.petrel.ui.model.buildNodes
 import com.robb3n.petrel.ui.model.buildSettings
 import com.robb3n.petrel.ui.model.buildTailnet
-import com.robb3n.petrel.ui.skin.IMPLEMENTED_SKINS
-import com.robb3n.petrel.ui.skin.PetrelSkin
 import com.robb3n.petrel.ui.skin.TabPager
+import com.robb3n.petrel.ui.skin.shoal.ShoalSkin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -59,13 +61,11 @@ private const val PROBE_MILLIS = 30_000L
 /**
  * 导航骨架与数据汇集：一级标签（连接 / 节点 / tailnet）是 `tabs` 路由里同一个横向 pager 的三页（[TabPager]，同 Mu3ic 的主壳），
  * `config`、`settings` 是推在它上面的二级页（无底栏）。
- * 这里把 CoreBridge 与各 repository 的数据推导成界面模型（`ui/model`）、拼出动作，交给当前皮肤去画；
- * 换皮肤只是重组，人停在原来的页面不动：NavController 与 [pager] 由调用方（MainActivity 的 setContent 根部）持有，
- * 不能建在这里——各皮肤的 Theme 是不同的 composable，PetrelApp 会随它整棵重建，里面建的 NavController 会回到首页。
+ * 这里把 CoreBridge 与各 repository 的数据推导成界面模型（`ui/model`）、拼出动作，交给 [ShoalSkin] 去画。
+ * NavController 与 [pager] 由调用方（MainActivity 的 setContent 根部，主题之外）持有。
  */
 @Composable
 fun PetrelApp(
-    skin: PetrelSkin,
     nav: NavHostController,
     pager: TabPager,
     onImportConfig: () -> Unit,
@@ -86,8 +86,13 @@ fun PetrelApp(
     val groups by GroupsRepository.groups.collectAsStateWithLifecycle()
     val testing by GroupsRepository.testing.collectAsStateWithLifecycle()
     val tailnet by TailnetRepository.status.collectAsStateWithLifecycle()
-    val skinKey by UiPrefs.skin.collectAsStateWithLifecycle()
     val tone by UiPrefs.tone.collectAsStateWithLifecycle()
+    val exitIpPlace by UiPrefs.exitIp.collectAsStateWithLifecycle()
+    val mode by ConnPrefs.mode.collectAsStateWithLifecycle()
+    val exitIp by ExitIpRepository.current.collectAsStateWithLifecycle()
+    val ipCache by ExitIpRepository.cache.collectAsStateWithLifecycle()
+    val filling by ExitIpRepository.filling.collectAsStateWithLifecycle()
+    val skin = ShoalSkin
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     // 首帧返回栈还没建好时 route 是 null，当作在 tabs 上
@@ -175,8 +180,12 @@ fun PetrelApp(
             openLogin = onOpenLogin,
             copyLogin = onCopyLogin,
             copyAddress = { ip -> copyToClipboard(ctx, "tailnet address", ip, "已复制地址") },
-            setSkin = UiPrefs::setSkin,
+            copyExitIp = { ip -> copyToClipboard(ctx, "exit IP", ip, "已复制出口 IP") },
             setTone = UiPrefs::setTone,
+            setExitIpPlace = UiPrefs::setExitIp,
+            // VPN 开着时改模式：重启服务生效（服务在 worker 上看 running，没在跑就什么也不做）
+            setTailnetOn = { on -> if (ConnPrefs.setTailnet(on) && CoreBridge.state.value.active) PetrelVpnService.restart(ctx) },
+            setProxyOn = { on -> if (ConnPrefs.setProxy(on) && CoreBridge.state.value.active) PetrelVpnService.restart(ctx) },
             openNodes = { goTab(Tab.Nodes) },
             openTailnet = { goTab(Tab.Tailnet) },
             openConfig = { push(Routes.CONFIG) },
@@ -193,10 +202,15 @@ fun PetrelApp(
                 HorizontalPager(pager.state, Modifier.fillMaxSize(), beyondViewportPageCount = pager.tabs.size - 1) { page ->
                     when (pager.tabs[page]) {
                         Tab.Home -> skin.Home(
-                            remember(s, config, import, groups, tailnet, testing) { buildHome(s, config, import, groups, tailnet, hostname, testing) },
+                            remember(s, config, import, groups, tailnet, testing, mode, exitIp, exitIpPlace) {
+                                buildHome(s, config, import, groups, tailnet, hostname, testing, prefMode = mode, exitIp = exitIp, place = exitIpPlace)
+                            },
                             actions,
                         )
-                        Tab.Nodes -> skin.Nodes(remember(s, groups, testing) { buildNodes(s, groups, testing) }, actions)
+                        Tab.Nodes -> skin.Nodes(
+                            remember(s, groups, testing, ipCache, filling) { buildNodes(s, groups, testing, ipCache, filling) },
+                            actions,
+                        )
                         Tab.Tailnet -> skin.Tailnet(remember(s, tailnet) { buildTailnet(s, tailnet, hostname) }, actions)
                     }
                 }
@@ -206,8 +220,8 @@ fun PetrelApp(
             }
             composable(Routes.SETTINGS) {
                 skin.Settings(
-                    remember(skinKey, tone, config) {
-                        buildSettings(skinKey, IMPLEMENTED_SKINS, tone, BuildConfig.VERSION_NAME, config)
+                    remember(mode, tone, exitIpPlace, config) {
+                        buildSettings(mode, tone, exitIpPlace, BuildConfig.VERSION_NAME, config)
                     },
                     actions,
                 )

@@ -22,6 +22,8 @@
 - **连接页 tailnet 行的「待登录」**：spec §2.7 写「留意色」，画稿里是普通 `--tx2`。按画稿做了。
 - 中文字体回落导致文字在行内的垂直位置与画稿差 1 到 2 dp（画稿是 Noto Sans SC，App 是系统字体，spec §5 已接受），浮岛、行的框体位置与画稿对得上。
 
+> 夜航、Tonal 两套皮肤已于 2026-10-06 删掉。下面两节留着，是因为里面的 Compose 搬画稿经验（基线对齐、描边 padding、动画值在 draw 阶段读等）还通用。
+
 ## 夜航（`av:8ug2rclp`）
 
 - **NavController 必须建在皮肤之上**：各皮肤的 `Theme` / `Shell` 是不同的 composable，换皮肤时它们下面的整棵子树被丢弃重建。`PetrelApp` 里自己 `rememberNavController()` 的话，在设置页点「皮肤」会跳回首页（spec §2.3 要求停在设置页）。现在 `MainActivity.setContent` 在 `skin.Theme` 外面建好传进来；NavHost 在新的 Shell 里重建时 NavController 带着返回栈。以后加皮肤、加页面别把导航状态挪回皮肤里。

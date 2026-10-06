@@ -13,10 +13,10 @@ import kotlinx.coroutines.launch
 
 /**
  * 一级 tab 的横向翻页（同 Mu3ic 的主壳）：三个 tab 是同一个 pager 的三页，根页上左右滑动（跟手）或点底栏切换。
- * 底栏的选中指示（Shoal 的胶囊、夜航的顶线、Tonal 的选中底）位置**就是 pager 的实时位置**（[position]），
+ * 底栏的选中指示（Shoal 的滑动胶囊）位置**就是 pager 的实时位置**（[position]），
  * 指示器只负责画：滑页、点某项、拖胶囊，动的都是 pager，页面与指示器永远同步。
  *
- * 状态由 MainActivity 持有（与 NavController 同层），换皮肤时停在原来那页。
+ * 状态由 MainActivity 持有（与 NavController 同层），主题随明暗重组时停在原来那页。
  */
 @Stable
 class TabPager internal constructor(val state: PagerState, private val scope: CoroutineScope) {

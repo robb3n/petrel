@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 
 /*
- * 按 CSS 行盒排字的原语，各皮肤共用（Shoal、夜航）。写法与坑见 Mu3ic docs/lessons/shoal-mockup-porting.md。
+ * 按 CSS 行盒排字的原语，Shoal 用。写法与坑见 Mu3ic docs/lessons/shoal-mockup-porting.md。
  */
 
 /**

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 仅 tailnet 模式下 App 直接查出口 IP：ip-api.com 的免费接口只有 http。其余一律不放行明文。 -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">ip-api.com</domain>
+    </domain-config>
+</network-security-config>

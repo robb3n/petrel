@@ -173,7 +173,7 @@ fun Modifier.longPressOnly(onLongClickLabel: String?, onLongClick: () -> Unit): 
 }
 
 /**
- * 进行中的图标匀速旋转，.9s/圈（skins.md：刷新、测速中的图标）。只在 [spin] 时才起动画；三套皮肤共用这一份。
+ * 进行中的图标匀速旋转，.9s/圈（skins.md：刷新、测速中的图标）。只在 [spin] 时才起动画。
  */
 fun Modifier.spinning(spin: Boolean): Modifier = composed {
     if (!spin) return@composed Modifier

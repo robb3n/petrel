@@ -8,6 +8,7 @@ class App : Application() {
         instance = this
         Notifications.ensureChannel(this)
         GroupsRepository.start()
+        ExitIpRepository.start(this)
     }
 
     companion object {

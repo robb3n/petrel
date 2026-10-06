@@ -5,12 +5,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import com.robb3n.petrel.R
 
-/**
- * 打包的 IBM Plex Mono：400 / 500 / 600（600 夜航用）。Shoal 里只有 `.lbl em`（画稿的 `--mono`）与登录链接、导入错误框用它；
- * 夜航、Tonal 的节点名、IP、延迟等数据也用它（spec §2.5）。
- */
+/** 打包的 IBM Plex Mono：400 / 500。只有 `.lbl em`（画稿的 `--mono`）与登录链接、导入错误框用它（spec §2.5）。 */
 val PlexMono = FontFamily(
     Font(R.font.ibm_plex_mono_regular, FontWeight.Normal),
     Font(R.font.ibm_plex_mono_medium, FontWeight.Medium),
-    Font(R.font.ibm_plex_mono_semibold, FontWeight.SemiBold),
 )

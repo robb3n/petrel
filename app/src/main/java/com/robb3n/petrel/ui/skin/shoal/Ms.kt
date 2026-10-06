@@ -66,6 +66,7 @@ object Ms {
     val speedFill: ImageVector @Composable get() = ImageVector.vectorResource(R.drawable.ms_speed_fill)
     val swapHoriz: ImageVector @Composable get() = ImageVector.vectorResource(R.drawable.ms_swap_horiz)
     val swapHorizFill: ImageVector @Composable get() = ImageVector.vectorResource(R.drawable.ms_swap_horiz_fill)
+    val sync: ImageVector @Composable get() = ImageVector.vectorResource(R.drawable.ms_sync)
     val tune: ImageVector @Composable get() = ImageVector.vectorResource(R.drawable.ms_tune)
     val tuneFill: ImageVector @Composable get() = ImageVector.vectorResource(R.drawable.ms_tune_fill)
 }
