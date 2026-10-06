@@ -7,7 +7,6 @@ import android.net.VpnService
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
-import android.util.Log
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
@@ -41,16 +40,16 @@ class PetrelTileService : TileService() {
     override fun onClick() {
         val s = CoreBridge.state.value
         if (s.active) {
-            Log.i(TAG, "tile: stop")
+            PLog.i("tile: stop")
             PetrelVpnService.stop(this)
             return
         }
         if (VpnService.prepare(this) != null) {
-            Log.i(TAG, "tile: vpn not prepared, opening app for consent")
+            PLog.i("tile: vpn not prepared, opening app for consent")
             launch(Intent(this, MainActivity::class.java).putExtra(MainActivity.EXTRA_START, true), RequestCodes.TILE_CONSENT)
             return
         }
-        Log.i(TAG, "tile: launching TileLaunchActivity")
+        PLog.i("tile: launching TileLaunchActivity")
         // 任务还在最近任务里时，光带 NEW_TASK 只会把旧任务带回前台、不建新实例（ColorOS 上 VPN 因此不起）。
         // CLEAR_TOP + SINGLE_TOP：栈里有 TileLaunchActivity 就清掉它上面的界面并投递 onNewIntent，没有就在任务顶上新建。
         launch(

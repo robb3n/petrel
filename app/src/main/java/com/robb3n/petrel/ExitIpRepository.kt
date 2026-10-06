@@ -1,7 +1,6 @@
 package com.robb3n.petrel
 
 import android.content.Context
-import android.util.Log
 import com.robb3n.petrel.core.ptcore.Ptcore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -205,7 +204,7 @@ object ExitIpRepository {
     private fun query(node: String?): ExitIpInfo? = runCatching {
         val body = if (node == null) directGet() else Ptcore.exitIP(node)
         parseExitIp(body)
-    }.onFailure { Log.w(TAG, "exit ip query failed: ${it.javaClass.simpleName}") }.getOrNull()
+    }.onFailure { PLog.w("exit ip query failed: ${it.javaClass.simpleName}") }.getOrNull()
 
     private fun directGet(): String {
         val c = URL(Ptcore.ExitIPURL).openConnection() as HttpURLConnection
@@ -241,7 +240,7 @@ object ExitIpRepository {
         runCatching {
             val o = JSONObject(f.readText())
             _cache.value = o.keys().asSequence().mapNotNull { k -> parseExitIp(o.getJSONObject(k).toString())?.let { k to it } }.toMap()
-        }.onFailure { Log.w(TAG, "exit ip cache unreadable: ${it.javaClass.simpleName}") }
+        }.onFailure { PLog.w("exit ip cache unreadable: ${it.javaClass.simpleName}") }
     }
 
     @Synchronized
@@ -253,6 +252,6 @@ object ExitIpRepository {
             val tmp = File(f.parentFile, "$FILE.tmp")
             tmp.writeText(o.toString())
             if (!tmp.renameTo(f)) error("rename failed")
-        }.onFailure { Log.w(TAG, "exit ip cache not saved: ${it.javaClass.simpleName}") }
+        }.onFailure { PLog.w("exit ip cache not saved: ${it.javaClass.simpleName}") }
     }
 }

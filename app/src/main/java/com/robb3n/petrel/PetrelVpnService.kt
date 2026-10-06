@@ -14,7 +14,6 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
-import android.util.Log
 import androidx.core.app.ServiceCompat
 import com.robb3n.petrel.core.ptcore.Ptcore
 import kotlinx.coroutines.MainScope
@@ -96,13 +95,13 @@ class PetrelVpnService : VpnService() {
     /** [startId] 是排队它的那次启动请求的 id：失败要停服务时，只在期间没有更新的请求时才停。 */
     private fun startVpn(startId: Int) {
         if (destroyed) {
-            Log.i(TAG, "service destroyed, queued start dropped")
+            PLog.i("service destroyed, queued start dropped")
             // 入口已经把状态改成「连接中」：按内核的真实状态补推，否则磁贴、通知、首页会一直卡着
             CoreBridge.onState(Ptcore.status())
             return
         }
         if (running) {
-            Log.i(TAG, "vpn already running")
+            PLog.i("vpn already running")
             CoreBridge.onState(Ptcore.status()) // 入口可能已经把状态改成「连接中」，这里按内核的真实状态补推一次
             return
         }
@@ -155,7 +154,7 @@ class PetrelVpnService : VpnService() {
             failAndStop("监听网络变化失败：${e.javaClass.simpleName}", startId)
             return
         }
-        Log.i(TAG, "vpn started")
+        PLog.i("vpn started")
     }
 
     /** tailnet + 代理、仅代理：接管全部流量，DNS 也交给内核。 */
@@ -205,7 +204,7 @@ class PetrelVpnService : VpnService() {
     private fun stopVpn(startId: Int) {
         stopCore()
         stopService(startId)
-        Log.i(TAG, "vpn stopped")
+        PLog.i("vpn stopped")
     }
 
     /**
@@ -213,7 +212,7 @@ class PetrelVpnService : VpnService() {
      * 新 fd 由 startVpn 里新的 establish() 产生。
      */
     private fun restartVpn(startId: Int) {
-        Log.i(TAG, "vpn restarting")
+        PLog.i("vpn restarting")
         stopCore() // running 先落到 false：startVpn 才不会当成「已在运行」，通知观察者也不会把中间的 stopped 刷到通知上
         CoreBridge.markStarting()
         startVpn(startId)
@@ -239,11 +238,7 @@ class PetrelVpnService : VpnService() {
             override fun onLost(network: Network) = changed("lost $network")
             override fun onLinkPropertiesChanged(network: Network, lp: LinkProperties) = changed("link $network")
             private fun changed(why: String) {
-                Log.i(TAG, "underlying network $why")
-                // debug 包把网络事件另记一份到私有目录：ColorOS 的 logcat 缓冲区只有 256 KiB，切网验证时常被冲掉
-                if (BuildConfig.DEBUG) {
-                    runCatching { File(filesDir, "netevents.log").appendText("${System.currentTimeMillis()} $why\n") }
-                }
+                PLog.i("underlying network $why")
                 // 不在系统的回调线程里同步调 Go：内核一旦卡住，会堵死整个进程的网络回调
                 worker.execute { Ptcore.notifyNetworkChanged() }
                 ExitIpRepository.networkChanged()
@@ -269,7 +264,7 @@ class PetrelVpnService : VpnService() {
     }
 
     override fun onRevoke() {
-        Log.i(TAG, "vpn revoked by system")
+        PLog.i("vpn revoked by system")
         val id = lastStartId // onRevoke 在主线程；之后又来的启动请求会让这次 stopSelfResult 返回 false
         worker.execute { stopVpn(id) }
     }
@@ -307,7 +302,7 @@ class PetrelVpnService : VpnService() {
         /** VPN 在运行时重启它让新配置生效；服务没在跑时什么也不做。 */
         fun restart(ctx: Context) {
             runCatching { ctx.startService(Intent(ctx, PetrelVpnService::class.java).setAction(ACTION_RESTART)) }
-                .onFailure { Log.w(TAG, "restart request failed: ${it.javaClass.simpleName}") }
+                .onFailure { PLog.w("restart request failed: ${it.javaClass.simpleName}") }
         }
     }
 }

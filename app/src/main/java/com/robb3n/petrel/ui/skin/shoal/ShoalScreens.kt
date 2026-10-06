@@ -927,6 +927,10 @@ internal fun ShoalSettings(ui: SettingsUi, a: PetrelActions) {
             ShoalCard(Modifier.padding(top = 12.dp)) {
                 ListRow("版本", trailing = { RowEnd("v${ui.versionName}") })
                 ListRow(
+                    "导出日志", sub = "经系统分享发出", onClick = a.exportLogs, role = Role.Button,
+                    trailing = { RowEnd(icon = Ms.chevronRight) },
+                )
+                ListRow(
                     "开源许可", onClick = { licenses = true }, role = Role.Button,
                     trailing = { RowEnd(icon = Ms.chevronRight) },
                 )

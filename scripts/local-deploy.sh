@@ -3,7 +3,7 @@
 # 本机构建 debug 包 → 复制到桌面侧载存档 ~/Desktop/petrel/Petrel-<versionName>.apk → 经 ssh 送到接着手机的主机（默认 keystone）
 # → 用那台主机自己的 adb 覆盖安装到手机 → 装之前 Petrel 的 VPN 开着的话，装完从快捷开关把它拉起来（不弹界面）。
 #
-# 为什么是 debug 包：push-config.sh、netevents.log 都靠 run-as，只对 debuggable 包有效；Petrel 界面轻，不像 Mu3ic 那样
+# 为什么是 debug 包：push-config.sh、读 files/logs/ 都靠 run-as，只对 debuggable 包有效；Petrel 界面轻，不像 Mu3ic 那样
 # 需要 release 构建才流畅。为什么在远端跑 adb：同 device-smoke.sh 开头的说明。
 #
 # 只做本地、可逆的动作。覆盖安装会让正在跑的 VPN 断开十秒左右，装完恢复原状态。

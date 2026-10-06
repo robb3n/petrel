@@ -59,7 +59,7 @@
 ColorOS 的 logcat 主缓冲区只有 256 KiB，系统日志又很多，几十秒前的内容就会被覆盖，事后 dump 抓不到切网那几秒。办法有两个：
 
 - 切网时实时抓流：`adb logcat -T 1 -v time Petrel:V '*:S' > file &`。注意同一个 tag 写多次时只有最后一个生效，`-s Petrel:I Petrel:W` 实际只剩 W。
-- debug 包会把每次底层网络回调追加到 `files/netevents.log`，用 `run-as com.robb3n.petrel cat files/netevents.log` 读。
+- 每次底层网络回调都会打一行 `underlying network …`，经 `PLog` 落进 `files/logs/petrel.log`，用 `run-as com.robb3n.petrel cat files/logs/petrel.log` 读（release 包用设置里的「导出日志」）。
 
 切网命令是 `adb shell cmd wifi set-wifi-enabled disabled|enabled`。蜂窝数据要开着。测完必须恢复 Wi-Fi。
 

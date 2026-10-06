@@ -470,6 +470,8 @@ class PetrelActions(
     val copyLogin: () -> Unit,
     val copyAddress: (ip: String) -> Unit,
     val copyExitIp: (ip: String) -> Unit,
+    /** 设置页「导出日志」：拼好日志文件，经系统分享面板发出。 */
+    val exportLogs: () -> Unit,
     val setTone: (UiTone) -> Unit,
     val setExitIpPlace: (ExitIpPlace) -> Unit,
     /** 设置里的两个开关；关掉最后一个开着的不生效。VPN 开着时会重连一次。 */

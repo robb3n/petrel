@@ -1,6 +1,5 @@
 package com.robb3n.petrel
 
-import android.util.Log
 import com.robb3n.petrel.core.ptcore.Ptcore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -65,7 +64,7 @@ object TailnetRepository {
     suspend fun refresh() {
         val gen = synchronized(lock) { generation }
         val json = withContext(Dispatchers.IO) {
-            runCatching { Ptcore.tailnetStatus() }.onFailure { Log.w(TAG, "tailnet status failed", it) }.getOrNull()
+            runCatching { Ptcore.tailnetStatus() }.onFailure { PLog.w("tailnet status failed", it) }.getOrNull()
         } ?: return
         val parsed = parse(json)
         synchronized(lock) {
@@ -103,7 +102,7 @@ object TailnetRepository {
             },
         )
     }.getOrElse {
-        Log.w(TAG, "bad tailnet status json", it)
+        PLog.w("bad tailnet status json", it)
         null
     }
 

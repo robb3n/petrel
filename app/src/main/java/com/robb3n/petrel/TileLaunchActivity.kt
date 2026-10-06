@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.Intent
 import android.net.VpnService
 import android.os.Bundle
-import android.util.Log
 
 /**
  * 磁贴起 VPN 的入口：透明、无界面。前台 Activity 起服务，然后把任务退到后台但不 finish，
@@ -64,7 +63,7 @@ class TileLaunchActivity : Activity() {
             finish()
             return
         }
-        Log.i(TAG, "tile launch: starting vpn from activity")
+        PLog.i("tile launch: starting vpn from activity")
         PetrelVpnService.start(this)
         moveTaskToBack(true)
     }

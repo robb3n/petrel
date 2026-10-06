@@ -48,7 +48,7 @@ Android 常驻代理 App：把 mihomo 内核和一个内置 tailnet 节点（tsn
 - 配置文件、节点凭据、tailnet 状态与任何密钥**永不进仓库**。仓库按公开的标准管理：内嵌 mihomo 决定了许可证只能是 GPL-3（本项目取 GPL-3.0-or-later）。
 - 不 fork mihomo。内核问题先找上游，或在 Go 层外围绕开。
 - App 名与文案不使用 "Tailscale" 商标。
-- 日志、check 复述、lessons 和提交里不得出现配置内容、secret、节点凭据或完整的登录 URL；唯一例外是 Go 层只打在设备 logcat 里的 `tailnet login URL:`，它是取登录链接的渠道。（Kotlin 侧的 `state` 日志把 `loginURL` 记成 `<set>`，校验报错与异常信息也不进日志。）出口 IP 与归属地的查询结果同样不进日志。
+- 日志、check 复述、lessons 和提交里不得出现配置内容、secret、节点凭据或完整的登录 URL；唯一例外是 Go 层只打在设备 logcat 里的 `tailnet login URL:`，它是取登录链接的渠道。（Kotlin 侧的 `state` 日志把 `loginURL` 记成 `<set>`，校验报错与异常信息也不进日志。）出口 IP 与归属地的查询结果同样不进日志。日志文件（`files/logs/`）与设置里的「导出日志」遵守同样的红线，且比 logcat 更严：`tailnet login URL:` 行与 mihomo 的 debug / info 行（逐条记连接目标）只进 logcat、不落盘。
 
 ### 参考实现
 
@@ -95,7 +95,7 @@ Android 常驻代理 App：把 mihomo 内核和一个内置 tailnet 节点（tsn
 - `scripts/chain-check.sh <config.yaml> [--switch]`：用 mihomo REST 测 PROXY 组每个节点和 `ts` 的延迟，从手机 shell 发真实请求（google 204、出口 IP、tailnet 探针），列出连接链路。带 `--switch` 时把每个节点切一遍看出口 IP，最后切回原选中项。退出码 0 表示全部通过。
 - 本机测试配置放在仓库外（例如 `~/.config/petrel/`，目录 700、文件 600）。
 - 起 VPN：VPN 授权必须人在手机上点一次（ColorOS 不让 adb 代授）。之后用 `am start -n com.robb3n.petrel/.MainActivity --ez com.robb3n.petrel.EXTRA_START true`，或 `cmd statusbar click-tile com.robb3n.petrel/.PetrelTileService`。
-- 查日志：logcat 缓冲区只有 256 KiB，要实时抓流，不要事后 dump。debug 包会把底层网络事件记到 `files/netevents.log`。见 `docs/lessons/network-change.md`。
+- 查日志：实时问题仍然抓 logcat 流（缓冲区只有 256 KiB，不要事后 dump）。事后排查读落盘的日志 `run-as com.robb3n.petrel cat files/logs/petrel.log`（轮转出的上一份是 `petrel.log.1`）；release 包不能 `run-as`，用设置里的「导出日志」。见 `docs/lessons/network-change.md`。
 
 ## 版本
 
@@ -113,7 +113,7 @@ Android 常驻代理 App：把 mihomo 内核和一个内置 tailnet 节点（tsn
 2. 退出码：`0` 装好了，再看 stderr 最后的「VPN：」一行（`restored` / `was off` / `not restored（原因）`，锁屏时磁贴会被拦下，报给人解锁后点一下快捷开关）；`1` 构建 / 安装失败或装完有本包的 FATAL EXCEPTION；`10` 手机或 ssh 主机不可用（APK 已在侧载存档里），按部署失败处理，接好手机后重跑。
 3. 报出侧载存档路径、装上的 versionName 和 VPN 恢复结果。
 
-为什么用 debug 包：`scripts/push-config.sh`、`files/netevents.log` 都靠 `run-as`，只对 debuggable 包有效；界面轻，不需要 release 构建才流畅。
+为什么用 debug 包：`scripts/push-config.sh`、读 `files/logs/` 都靠 `run-as`，只对 debuggable 包有效；界面轻，不需要 release 构建才流畅。
 
 ## Release
 
@@ -136,6 +136,7 @@ opt-in `/release`，只由人发起。发布的是回火任务的 stamp 打过 t
 ## 代码约定 / 经验
 
 - **新功能 = `ui/model` 推导一次 + Shoal 渲染**：数据推导（状态映射、链路、延迟分档、文案）只写在 `ui/model/`（纯函数，JVM 单测 `./gradlew :app:testDebugUnitTest`），`ui/skin/shoal/` 只渲染模型、调用 `PetrelActions`，**不直接读 repository 或 `CoreBridge`**。动皮肤、系统栏、冷启动底色之前先读 `docs/lessons/skins.md`。
+- **日志一律走 `PLog`**（`PLog.kt`），不直接调 `android.util.Log`：它照打 logcat，同时经后台线程写 `files/logs/petrel.log`（1 MiB 轮转一份 `.1`），调用方线程上不做文件 IO。落盘规则是 `LogFile.kt` 的 `shouldPersist`；带异常时文件里只记类名链。
 - 项目级踩坑落 `docs/lessons/`，随 stamp 进 git（如 VPN 自环、tsnet 网络切换、各 ROM 的快捷开关与后台行为）。
 - **动 VpnService 的防自环方式、tun stack 或 mihomo 构建标签之前，先读 `docs/lessons/vpn-tun-stack.md`**。三者互相牵制：本 App 排除出 VPN 就只能用 gvisor；不带 `cmfa` 标签 TUN 建不起来。
 - **动网络回调、`ptcore` 的锁、tsnet 的日志或本机的 tailnet 节点名之前，先读 `docs/lessons/network-change.md`**。要点：

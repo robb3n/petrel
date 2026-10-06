@@ -29,6 +29,7 @@ import com.robb3n.petrel.ConnPrefs
 import com.robb3n.petrel.CoreBridge
 import com.robb3n.petrel.ExitIpRepository
 import com.robb3n.petrel.GroupsRepository
+import com.robb3n.petrel.LogExport
 import com.robb3n.petrel.PetrelVpnService
 import com.robb3n.petrel.TailnetHostname
 import com.robb3n.petrel.TailnetRepository
@@ -181,6 +182,7 @@ fun PetrelApp(
             copyLogin = onCopyLogin,
             copyAddress = { ip -> copyToClipboard(ctx, "tailnet address", ip, "已复制地址") },
             copyExitIp = { ip -> copyToClipboard(ctx, "exit IP", ip, "已复制出口 IP") },
+            exportLogs = { scope.launch { LogExport.share(ctx) } },
             setTone = UiPrefs::setTone,
             setExitIpPlace = UiPrefs::setExitIp,
             // VPN 开着时改模式：重启服务生效（服务在 worker 上看 running，没在跑就什么也不做）

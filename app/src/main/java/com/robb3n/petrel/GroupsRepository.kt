@@ -1,6 +1,5 @@
 package com.robb3n.petrel
 
-import android.util.Log
 import com.robb3n.petrel.core.ptcore.Ptcore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -70,7 +69,7 @@ object GroupsRepository {
 
     private fun reload() {
         val parsed = runCatching { parse(Ptcore.groups()) }
-            .onFailure { Log.w(TAG, "groups failed", it) }
+            .onFailure { PLog.w("groups failed", it) }
             .getOrNull() ?: return
         _groups.value = parsed
     }
@@ -83,7 +82,7 @@ object GroupsRepository {
         scope.launch {
             runCatching { Ptcore.selectProxy(group, name) }.onFailure {
                 // 错误信息带着组名与节点名（配置内容），只给界面
-                Log.w(TAG, "select failed: ${it.javaClass.simpleName}")
+                PLog.w("select failed: ${it.javaClass.simpleName}")
                 // 只回滚这一组、且仍停在这次失败的选择上时才回滚：期间人又选了别的节点（可能已经成功），不能把它也撤掉
                 if (old != null) {
                     _groups.update { gs -> gs.map { g -> if (g.name == group && g.now == name) g.copy(now = old) else g } }
@@ -98,7 +97,7 @@ object GroupsRepository {
         if (!_testing.compareAndSet(expect = false, update = true)) return
         scope.launch {
             try {
-                runCatching { Ptcore.testGroupDelay("") }.onFailure { Log.w(TAG, "test delay failed", it) }
+                runCatching { Ptcore.testGroupDelay("") }.onFailure { PLog.w("test delay failed", it) }
             } finally {
                 _testing.value = false
             }
@@ -114,9 +113,9 @@ object GroupsRepository {
                 ExitIpRepository.requery()
                 // 仅 tailnet 没有代理组，内核的 Refresh 没事可做；只重拉节点列表
                 if (CoreBridge.state.value.mode != ConnMode.Tailnet) {
-                    runCatching { Ptcore.refresh() }.onFailure { Log.w(TAG, "refresh failed", it) }
+                    runCatching { Ptcore.refresh() }.onFailure { PLog.w("refresh failed", it) }
                 }
-                runCatching { TailnetRepository.refresh() }.onFailure { Log.w(TAG, "tailnet refresh failed", it) }
+                runCatching { TailnetRepository.refresh() }.onFailure { PLog.w("tailnet refresh failed", it) }
             } finally {
                 _testing.value = false
             }
@@ -131,7 +130,7 @@ object GroupsRepository {
         probing = true
         scope.launch {
             try {
-                runCatching { Ptcore.probeSelected(false) }.onFailure { Log.w(TAG, "probe selected failed", it) }
+                runCatching { Ptcore.probeSelected(false) }.onFailure { PLog.w("probe selected failed", it) }
             } finally {
                 probing = false
             }

@@ -3,7 +3,6 @@ package com.robb3n.petrel
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.util.Log
 import android.widget.Toast
 
 /**
@@ -14,7 +13,7 @@ fun copyLoginUrl(ctx: Context) {
     val url = CoreBridge.state.value.loginURL
     if (url.isEmpty()) return
     copyToClipboard(ctx, "tailnet login", url, "已复制登录链接")
-    Log.i(TAG, "copied tailnet login url")
+    PLog.i("copied tailnet login url")
 }
 
 /** 复制到系统剪贴板并弹 Toast（调用方在主线程）。[label] 只是剪贴板条目的描述，不显示给人。 */

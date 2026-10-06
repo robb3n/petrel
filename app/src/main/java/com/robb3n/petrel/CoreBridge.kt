@@ -2,7 +2,6 @@ package com.robb3n.petrel
 
 import android.content.ComponentName
 import android.service.quicksettings.TileService
-import android.util.Log
 import com.robb3n.petrel.core.ptcore.Host
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -59,28 +58,28 @@ data class CoreState(
             )
         }.getOrElse {
             // 不记原文与异常信息：里面有完整登录链接，JSONException 的信息也会引用原文
-            Log.w(TAG, "bad state json: ${it.javaClass.simpleName}")
+            PLog.w("bad state json: ${it.javaClass.simpleName}")
             STOPPED
         }
     }
 }
 
-/** Go 内核的 Host 实现：状态进 StateFlow 并刷新磁贴，日志进 logcat（tag Petrel）。 */
+/** Go 内核的 Host 实现：状态进 StateFlow 并刷新磁贴，日志经 [PLog] 进 logcat（tag Petrel）与日志文件。 */
 object CoreBridge : Host {
     private val _state = MutableStateFlow(CoreState.STOPPED)
     val state: StateFlow<CoreState> = _state
 
     override fun onState(json: String) {
-        Log.i(TAG, "state ${redactStateJson(json)}") // 登录链接与错误文本不进日志
+        PLog.i("state ${redactStateJson(json)}") // 登录链接与错误文本不进日志
         set(CoreState.parse(json))
     }
 
     override fun log(level: String, msg: String) {
         when (level) {
-            "debug" -> Log.d(TAG, msg)
-            "warn", "warning" -> Log.w(TAG, msg)
-            "error" -> Log.e(TAG, msg)
-            else -> Log.i(TAG, msg)
+            "debug" -> PLog.d(msg)
+            "warn", "warning" -> PLog.w(msg)
+            "error" -> PLog.e(msg)
+            else -> PLog.i(msg)
         }
     }
 
@@ -89,7 +88,7 @@ object CoreBridge : Host {
      * [logLine] 进日志，带了异常信息（可能含配置内容）时调用方要给一个不含它的版本。
      */
     fun fail(message: String, logLine: String = message) {
-        Log.e(TAG, logLine)
+        PLog.e(logLine)
         set(CoreState.STOPPED.copy(error = message))
     }
 

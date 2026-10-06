@@ -5,7 +5,6 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
-import android.util.Log
 import android.widget.Toast
 import com.robb3n.petrel.core.ptcore.Ptcore
 import kotlinx.coroutines.CoroutineScope
@@ -95,7 +94,7 @@ object ConfigRepository {
             val error = try {
                 doImport(app, uri)
             } catch (e: Exception) {
-                Log.w(TAG, "import failed: ${e.javaClass.simpleName}") // 异常信息可能带路径或内容，不记
+                PLog.w("import failed: ${e.javaClass.simpleName}") // 异常信息可能带路径或内容，不记
                 ImportError("保存失败：${e.message}")
             }
             _import.value = ImportUi(busy = false, error = error)
@@ -137,7 +136,7 @@ object ConfigRepository {
         try {
             saveConfig(app, bytes, name)
         } catch (e: IOException) {
-            Log.w(TAG, "save config failed: ${e.javaClass.simpleName}")
+            PLog.w("save config failed: ${e.javaClass.simpleName}")
             return ImportError("保存失败：${e.message}")
         }
         refresh(app)
@@ -169,7 +168,7 @@ object ConfigRepository {
             // 配置已经换上了；旧元数据对不上新配置，删掉，界面退回显示 config.yaml 与文件时间
             metaTmp.delete()
             File(dir, META_FILE).delete()
-            Log.w(TAG, "save meta failed: ${e.javaClass.simpleName}")
+            PLog.w("save meta failed: ${e.javaClass.simpleName}")
         }
     }
 
@@ -185,7 +184,7 @@ object ConfigRepository {
             try {
                 toast(app, doReplaceGeoIp(app, uri))
             } catch (e: Exception) {
-                Log.w(TAG, "replace geoip failed: ${e.javaClass.simpleName}")
+                PLog.w("replace geoip failed: ${e.javaClass.simpleName}")
                 toast(app, "保存失败：${e.message}")
             } finally {
                 _geo.value = geoStatus(app)

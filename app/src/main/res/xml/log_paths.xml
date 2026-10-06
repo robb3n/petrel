@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 设置页「导出日志」拼好的文件在 cache/export/，只把这个目录交给 FileProvider（LogExport.kt）。 -->
+<paths>
+    <cache-path name="export" path="export/" />
+</paths>
