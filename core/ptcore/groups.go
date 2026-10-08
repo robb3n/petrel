@@ -13,6 +13,7 @@ import (
 	"github.com/metacubex/mihomo/adapter/outboundgroup"
 	"github.com/metacubex/mihomo/component/profile/cachefile"
 	"github.com/metacubex/mihomo/component/proxydialer"
+	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/tunnel"
 	"github.com/metacubex/mihomo/tunnel/statistic"
@@ -335,6 +336,8 @@ func currentGen() int {
 
 // SelectProxy 切换组的选中项：Set → cachefile 持久化 → 断开链路经过该组的现有连接 → exit/groupsRev 更新并 publish。
 func SelectProxy(group string, name string) error {
+	lifecycleMu.Lock()
+	defer lifecycleMu.Unlock()
 	if !running() {
 		return errors.New("not running")
 	}
@@ -356,10 +359,21 @@ func SelectProxy(group string, name string) error {
 	}
 	cachefile.Cache().SetSelected(group, name)
 	closed := closeConnectionsThrough(group)
+	// Close old upstream transports first, then clear real DNS answers. Keep the
+	// fake-IP mapping: apps can still be holding those synthetic addresses.
+	clearDNSCache()
 	logf("info", "select: %s -> %s (closed %d connections)", group, name, closed)
 
 	bumpGroups(gen, currentExit(), true)
 	return nil
+}
+
+func clearDNSCache() {
+	// Do this synchronously, so successful selection means the cache is cleared.
+	if resolver.DefaultResolver != nil {
+		resolver.DefaultResolver.ClearCache()
+	}
+	resolver.SystemResolver.ClearCache()
 }
 
 // closeConnectionsThrough 断开链路里含该组名的现有连接，让切换立刻生效。

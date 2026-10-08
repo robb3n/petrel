@@ -28,6 +28,9 @@ func parseConfig(mihomoDir string, injected []byte) (*config.Config, error) {
 	parseMu.Lock()
 	defer parseMu.Unlock()
 	constant.SetHomeDir(mihomoDir)
+	if err := ensureDNSRules(mihomoDir); err != nil {
+		return nil, err
+	}
 	return executor.ParseWithBytes(injected)
 }
 
@@ -38,6 +41,9 @@ func parseAndApplyConfig(mihomoDir string, injected []byte, handOff func()) erro
 	parseMu.Lock()
 	defer parseMu.Unlock()
 	constant.SetHomeDir(mihomoDir)
+	if err := ensureDNSRules(mihomoDir); err != nil {
+		return err
+	}
 	cfg, err := executor.ParseWithBytes(injected)
 	if err != nil {
 		return err
@@ -48,7 +54,8 @@ func parseAndApplyConfig(mihomoDir string, injected []byte, handOff func()) erro
 }
 
 // ValidateConfig 用与 Start 相同的 injectConfig 变换（占位 fd 与占位 socks 地址）后交给 mihomo 解析。
-// 返回 "" 表示通过，否则是错误原文。不 ApplyConfig、不写文件、不碰运行中的 tsnet，也不需要 mu。
+// 返回 "" 表示通过，否则是错误原文。不 ApplyConfig、不改用户配置、不碰运行中的 tsnet。
+// 解析前安装随 App 附带的国内规则快照；仅写专用的内容寻址资源文件。
 // homeDir 与 Start 的含义相同。解析走 parseConfig 的专用锁，与 Start 的解析串行，不会交错改全局设置。
 func ValidateConfig(homeDir string, yaml []byte) string {
 	injected, _, _, err := injectConfig(yaml, placeholderFd, placeholderSocks, "validate", "validate")

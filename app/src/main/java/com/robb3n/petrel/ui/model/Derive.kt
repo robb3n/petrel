@@ -237,6 +237,7 @@ fun geoText(geo: GeoIpStatus?): String = when (geo) {
 
 /** 配置页「加载时 Petrel 会改写这些」。改 [injectConfig] 的行为时同步这里。 */
 val PETREL_REWRITES: List<RewriteItem> = listOf(
+    RewriteItem("DNS 与国内分流", "默认自动应用：国内域名直连解析，其他域名的加密 DNS 跟随主代理；切换节点刷新解析缓存。原始文件保留。"),
     RewriteItem("ts", "注入的 tailnet 节点，用 dialer-proxy: ts 引用"),
     RewriteItem("tun", "接管为 Petrel 的 VPN，固定 gvisor"),
     RewriteItem("external-controller", "固定 127.0.0.1:9090，没写 secret 时随机生成；其余 controller 入口一律删除"),

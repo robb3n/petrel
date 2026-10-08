@@ -29,6 +29,7 @@ fun LogoutDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
 
 /** 打包进 App 的第三方组件与许可证，开源许可对话框列它们。 */
 val OPEN_SOURCE_LICENSES: List<Pair<String, String>> = listOf(
+    "MetaCubeX meta-rules-dat（国内域名快照）" to "GPL-3.0 · 来源与筛选方式见 core/ptcore/assets/README.md",
     "Petrel（本应用）" to "GPL-3.0-or-later",
     "mihomo（MetaCubeX）" to "GPL-3.0",
     "tailscale / tsnet（metacubex fork）" to "BSD-3-Clause",

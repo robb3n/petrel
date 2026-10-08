@@ -30,7 +30,7 @@ var extraControllerKeys = []string{
 
 // InjectConfig 把用户的 mihomo 配置改写成能在本 App 的 VpnService 里运行的形态：
 // TUN 改为接管 VpnService 交来的 fd，去掉桌面端的网卡绑定，并注入指向 tsnet Loopback SOCKS5 的 ts 节点。
-// 用户配置没写 secret（缺失或空串）时写入 fallbackSecret，写了就保留用户的值。其余内容原样保留。
+// 用户配置没写 secret（缺失或空串）时写入 fallbackSecret；DNS 由 Petrel 的默认策略管理。
 func InjectConfig(user []byte, tunFd int, socksAddr string, socksPass string, fallbackSecret string) ([]byte, error) {
 	out, _, _, err := injectConfig(user, tunFd, socksAddr, socksPass, fallbackSecret)
 	return out, err
@@ -161,6 +161,9 @@ func injectConfig(user []byte, tunFd int, socksAddr string, socksPass string, fa
 		proxies = append(proxies, tsProxy)
 	}
 	cfg["proxies"] = proxies
+	if err := applyDNSPolicy(cfg); err != nil {
+		return nil, nil, nil, err
+	}
 
 	out, err := yaml.Marshal(cfg)
 	if err != nil {

@@ -589,7 +589,7 @@ class ConfigUiTest {
     @Test fun rewritesMentionEveryControllerEntryRemoval() {
         val rows = buildConfig(info, ImportUi(), null, false, utc).rewrites
         assertEquals(
-            listOf("ts", "tun", "external-controller", "interface-name · routing-mark", "listeners · tunnels", "petrel-via"),
+            listOf("DNS 与国内分流", "ts", "tun", "external-controller", "interface-name · routing-mark", "listeners · tunnels", "petrel-via"),
             rows.map { it.key },
         )
         assertTrue(rows.first { it.key == "external-controller" }.desc.contains("其余 controller 入口一律删除"))

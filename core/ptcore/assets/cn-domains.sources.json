@@ -1,0 +1,16 @@
+{
+  "created": "2026-10-08T08:05:31.224941+00:00",
+  "sources": [
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.list",
+      "sha256": "3ea974699627c91d18d107c7f1b25d10e3d57033a8c941bce19be8e3cae4008b"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/geolocation-cn.list",
+      "sha256": "038a249dd3d8cf8d81fb9de0b4fc933e3bcdca4b3b8e96860358020626a5073d"
+    }
+  ],
+  "transform": "Union non-comment nonempty entries; discard +. followed by a single DNS label (all TLD-wide suffixes); sort; mihomo convert-ruleset domain text.",
+  "updates": "Pinned audited local snapshot. Refresh requires reapplying filter and validating routing/DNS together. No automatic unfiltered replacement.",
+  "mrs_sha256": "da4356fda44c7d069d7b86c069241bef5e9a154a1f9c98bc40e57a47c98ea9a8"
+}

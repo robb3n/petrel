@@ -4,7 +4,7 @@
 
 ## 校验用 `ValidateConfig`，行为以实测为准
 
-- 与 `Start` 走同一个 `injectConfig`（占位 fd 与 `127.0.0.1:1`），再交给 `executor.ParseWithBytes`；不 `ApplyConfig`、不写文件、不碰 `mu`。
+- 与 `Start` 走同一个 `injectConfig`（占位 fd 与 `127.0.0.1:1`），再交给 `executor.ParseWithBytes`；不 `ApplyConfig`、不改用户配置、不碰 `mu`。2026-10-08 起，解析前会原子安装随包的国内域名规则资源，文件名带内容哈希，校验失败也不会改正在运行的配置。
 - 空文件会**通过**：`injectConfig` 会补上 `tun`、`ts` 等，mihomo 放行（单测 `TestValidateConfigEmpty` 固定了这个行为）。空配置连得上但没有代理组。
 - 报错原文带索引，例如 `proxy group[0]: PROXY: 'tokyo-iij' not found`（画稿里写的是不带 `[0]` 的示意文案）。界面原样显示。
 - 解析期间 mihomo 会经 `temporaryUpdateGeneral` 临时改全局设置再回滚。校验超时后 Go 侧还会接着跑（不可取消），这时重试导入、或替换 GeoIP 触发 RESTART，`Start` 的解析就会与它交错，运行中内核的全局设置会错，也是数据竞争。所以 `ValidateConfig` 的解析与 `Start` 的「SetHomeDir + 解析 + ApplyConfig」整段都在专用的 `parseMu` 下串行（只锁解析的话，校验的解析仍能插进「解析完、应用中」的缝里，回滚时盖掉刚应用的设置）（不是 `mu`；锁内不调 Host）。真机上 VPN 运行时导入一份坏配置：横幅正常、进程不变、没有重启，随后 `chain-check.sh` 全通过。

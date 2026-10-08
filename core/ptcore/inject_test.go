@@ -130,8 +130,8 @@ func TestDesktopBindingsAreRemoved(t *testing.T) {
 	if findProxy(t, cfg, "landing")["dialer-proxy"] != "front" {
 		t.Errorf("other proxy fields should be kept")
 	}
-	if rules, _ := cfg["rules"].([]any); len(rules) != 2 {
-		t.Errorf("rules should be kept as-is, got %v", cfg["rules"])
+	if rules, _ := cfg["rules"].([]any); len(rules) != 3 || rules[0] != "IP-CIDR,100.64.0.0/10,ts,no-resolve" || rules[2] != "MATCH,landing" {
+		t.Errorf("explicit rules should retain priority around the domestic rule, got %v", cfg["rules"])
 	}
 }
 
@@ -161,6 +161,7 @@ func TestTsProxyIsAppended(t *testing.T) {
 
 func TestExistingTsProxyIsReplaced(t *testing.T) {
 	src := `
+petrel-dns: {mode: original}
 proxies:
   - name: ts
     type: tailscale
@@ -401,6 +402,7 @@ proxies: []
 
 func TestInjectDropsProxyRoutingMark(t *testing.T) {
 	cfg, _ := inject(t, `
+petrel-dns: {mode: original}
 proxies:
   - name: front
     type: ss
