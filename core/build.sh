@@ -19,6 +19,9 @@ if ! command -v gomobile >/dev/null; then
   exit 1
 fi
 
+# Offline gate: never package an interrupted or unverified snapshot update.
+go run ./cmd/cn-rules verify --assets ptcore/assets
+
 out="${1:-../app/libs/ptcore.aar}"
 mkdir -p "$(dirname "$out")"
 gomobile bind \

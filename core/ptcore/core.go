@@ -79,8 +79,8 @@ var tailnetOnlyConfig = []byte("mode: rule\nlog-level: warning\nipv6: true\nrule
 var (
 	lifecycleMu sync.Mutex
 
-	mu       sync.Mutex
-	srv      *tsnet.Server
+	mu  sync.Mutex
+	srv *tsnet.Server
 	// active：Start 成功走到起内核那一步之后为 true，teardown 置回 false。ModeProxy 没有 srv，「内核在不在」看它
 	active   bool
 	cancel   context.CancelFunc
@@ -205,7 +205,8 @@ func Start(homeDir string, configPath string, tunFd int, hostname string, mode s
 		return errors.New("TUN 启动失败，详见 mihomo 日志")
 	}
 
-	exit := currentExit() // 调 mihomo，必须在锁外
+	startDNSRoutes(ctx, user) // session-scoped; Start still holds lifecycleMu
+	exit := currentExit()     // 调 mihomo，必须在锁外
 	mu.Lock()
 	cur.VPN = "running"
 	cur.Exit = exit
@@ -348,6 +349,7 @@ func Stop() {
 }
 
 func teardown() {
+	activeDNSRoutes = nil // lifecycleMu is held; cancelled observers cannot touch a new session
 	mu.Lock()
 	s, c := srv, cancel
 	srv, cancel = nil, nil

@@ -2,8 +2,6 @@ package ptcore
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -13,6 +11,7 @@ import (
 
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
+	R "github.com/robb3n/petrel/core/internal/cnrules"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -153,8 +152,15 @@ func TestManagedDNSOriginalModeAndReservedName(t *testing.T) {
 }
 
 func TestManagedDNSBundledRulesAndRepair(t *testing.T) {
-	if fmt.Sprintf("%x", sha256.Sum256(cnRules)) != "da4356fda44c7d069d7b86c069241bef5e9a154a1f9c98bc40e57a47c98ea9a8" {
-		t.Fatal("snapshot changed: audit and update provenance")
+	manifest, err := os.ReadFile("assets/cn-domains.sources.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := R.Verify(cnRules, manifest); err != nil {
+		t.Fatal(err)
+	}
+	if cnRulePath != "rules/petrel-cn-domains-"+R.Hash(cnRules)[:8]+".mrs" {
+		t.Fatal("snapshot path is stale")
 	}
 	home := t.TempDir()
 	injected, _, _, err := injectConfig([]byte(validMinimal), 42, placeholderSocks, "test", "test")

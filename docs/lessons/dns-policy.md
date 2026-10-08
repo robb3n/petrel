@@ -14,7 +14,7 @@
 
 上游 `resolver.ClearCache()` 会起 goroutine。要保证 `SelectProxy` 返回时清理已完成，直接同步调用 `DefaultResolver.ClearCache()` 与 `SystemResolver.ClearCache()`。外层与 Start / Stop 串行，不能拿着保护状态的小锁 `mu` 调内核。
 
-REST PUT `/proxies/...` 绕过 Petrel `SelectProxy`。现有 `chain-check.sh --switch` 可以测链路，不能证明 App 的切换后处理有效；验收必须走界面入口。
+REST PUT `/proxies/...` 绕过 Petrel `SelectProxy`。手动回调仍需单独走界面验证；2026-10-09 新增的运行期观察器另行覆盖 REST 与自动组，不能把两个入口的验证混为一谈。
 
 ## 导入的特殊 DNS 不可无条件合并
 
@@ -27,3 +27,17 @@ Go map 经 YAML 编码会按键排序。`www...` 域名可能排在 `rule-set:..
 ## 真机观察不能只等 REST 的 now 改变
 
 `SelectProxy` 先 `Set`，随后关闭连接、清缓存；`/proxies/PROXY.now` 在整个回调完成之前就会变。验收脚本应在有界时间内等旧 tracker 消失，再断言新 DNS 连接的链路。瞬间看到 now 已变但旧连接尚在，不足以判定完成后的连接复用故障。
+
+## 自动切换要观察有效依赖，不能只看主组名字
+
+主组可能一直选中 AUTO，而 AUTO 的节点已从日本切到美国；出口节点本身也可能不变，只有 dialer-proxy 前置切换。观察器沿实际 Proxy 对象展开依赖（provider 成员未必出现在顶层 Proxies 表），保留对象身份以识别同名替换。只看 PROXY.now 会漏掉这些变化。
+
+上游没有切换回调，不 fork 内核的方案采用 2 秒检查，明确是最终一致；不能承诺 REST 返回即已清理。LoadBalance 的 Unwrap 可能推进 round-robin，观察它时必须遍历成员而不是假装选择一次出口。
+
+清连接要同时限制 INNER、托管解析器 IP、443 和主 DNS 代理链，不能按组名扫掉所有用户连接，也不能把所有 INNER 都当 DNS。手动切换已有的全组断连语义保留；观察器仅新增 DNS 清理。扫描后才完成的旧节点拨号通过后续组链检查收敛。停机取消与会话身份检查必须在 lifecycleMu 内重查，防止旧 goroutine 等锁后扫到新 VPN。
+
+## 规则更新要绑定同一提交，并保留可审查差异
+
+分别下载可变分支上的 cn 与 geolocation-cn，可能跨越上游一次发布。维护工具先固定一个 commit SHA，再取两份源，候选保存源文件哈希、过滤结果、编译器与二进制哈希。MRS 是二进制，审查需比较解码后的完整增删清单，不能只看文件大小或条数。
+
+文件名和单测各手抄一份 SHA 会让更新遗漏。现在运行时路径从 embed 内容计算，测试与构建检查来源清单；Gradle 把 JSON 和 MRS 一起纳入输入，并在缓存命中时也执行离线校验。两次 rename 不构成事务，更新工具保留旧资源与已知新旧哈希供回退，并用锁和构建校验挡住中途状态。

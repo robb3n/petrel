@@ -2,6 +2,7 @@ package ptcore
 
 import (
 	"bytes"
+	"crypto/sha256"
 	_ "embed"
 	"fmt"
 	"net/url"
@@ -16,7 +17,6 @@ import (
 const (
 	dnsPolicyKey = "petrel-dns"
 	cnProvider   = "petrel-cn-domains"
-	cnRulePath   = "rules/petrel-cn-domains-da4356fd.mrs"
 	directDoH    = "https://223.5.5.5/dns-query#DIRECT"
 )
 
@@ -24,6 +24,9 @@ const (
 //
 //go:embed assets/cn-domains.mrs
 var cnRules []byte
+
+// Derive the content-addressed path; updates no longer require editing Go literals.
+var cnRulePath = "rules/petrel-cn-domains-" + fmt.Sprintf("%x", sha256.Sum256(cnRules))[:8] + ".mrs"
 
 // applyDNSPolicy runs for both validation and startup, on a freshly decoded copy.
 // The imported file is never rewritten. Original mode is an explicit escape hatch

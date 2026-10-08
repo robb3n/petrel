@@ -97,10 +97,16 @@ android {
 
 // Go 内核层（mihomo + tsnet）经 gomobile 编成 AAR；Go 源码没变时任务 UP-TO-DATE。
 val coreAar = layout.projectDirectory.file("libs/ptcore.aar")
+// Run even when the AAR is cached, so interrupted updates cannot skip the gate.
+val verifyDNSRules by tasks.registering(Exec::class) {
+    workingDir = rootProject.projectDir
+    commandLine("bash", "scripts/cn-rules.sh", "verify")
+}
 val buildCore by tasks.registering(Exec::class) {
+    dependsOn(verifyDNSRules)
     val coreDir = rootProject.layout.projectDirectory.dir("core")
     // 只改 Go 测试不进 AAR，不该触发 gomobile 重编
-    inputs.files(fileTree(coreDir) { include("**/*.go", "ptcore/assets/*.mrs", "go.mod", "go.sum", "build.sh"); exclude("**/*_test.go") })
+    inputs.files(fileTree(coreDir) { include("**/*.go", "ptcore/assets/*.mrs", "ptcore/assets/*.json", "go.mod", "go.sum", "build.sh"); exclude("**/*_test.go") })
     outputs.file(coreAar)
     workingDir = coreDir.asFile
     commandLine("bash", "build.sh", coreAar.asFile.absolutePath)

@@ -362,6 +362,9 @@ func SelectProxy(group string, name string) error {
 	// Close old upstream transports first, then clear real DNS answers. Keep the
 	// fake-IP mapping: apps can still be holding those synthetic addresses.
 	clearDNSCache()
+	if activeDNSRoutes != nil {
+		activeDNSRoutes.reconcile(tunnel.Proxies(), statistic.DefaultManager, clearDNSCache)
+	}
 	logf("info", "select: %s -> %s (closed %d connections)", group, name, closed)
 
 	bumpGroups(gen, currentExit(), true)
