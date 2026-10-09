@@ -58,7 +58,7 @@ dns:
 		t.Fatal("private hosts/filter lost")
 	}
 	p := d["nameserver-policy"].(map[string]any)
-	if len(p) != 1 || p["rule-set:"+cnProvider] == nil {
+	if len(p) != 1+len(domesticAppHosts) || p["rule-set:"+cnProvider] == nil {
 		t.Fatal("legacy DNS policy leaked through")
 	}
 }
@@ -70,7 +70,7 @@ func TestManagedDNSRoutingAndExplicitExceptions(t *testing.T) {
   - GEOIP,CN,DIRECT
   - MATCH,PROXY`, 1))
 	r := cfg["rules"].([]any)
-	if len(r) != 6 || r[3] != "RULE-SET,"+cnProvider+",DIRECT" || r[4] != "GEOIP,CN,DIRECT" {
+	if len(r) != 6+len(domesticAppHosts) || r[3+len(domesticAppHosts)] != "RULE-SET,"+cnProvider+",DIRECT" || r[4+len(domesticAppHosts)] != "GEOIP,CN,DIRECT" {
 		t.Fatal(r)
 	}
 	p := cfg["dns"].(map[string]any)["nameserver-policy"].(map[string]any)
@@ -110,6 +110,72 @@ func TestManagedDNSAutoTargetAndOverride(t *testing.T) {
 	}
 }
 
+func TestManagedDNSWeChatImageCompatibility(t *testing.T) {
+	for _, tc := range []struct{ name, rule, want string }{
+		{"default", "", "DIRECT"},
+		{"explicit exact proxy", "DOMAIN,mmbiz.qpic.cn,PROXY", "PROXY"},
+		{"explicit suffix proxy", "DOMAIN-SUFFIX,qpic.cn,PROXY", "PROXY"},
+		{"explicit reject", "DOMAIN,mmbiz.qpic.cn,REJECT", "REJECT"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := validMinimal
+			if tc.rule != "" {
+				src = strings.Replace(src, "  - MATCH,PROXY", "  - "+tc.rule+"\n  - MATCH,PROXY", 1)
+			}
+			out, _, _, err := injectConfig([]byte(src), 42, placeholderSocks, "test", "test")
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := parseConfig(t.TempDir(), out)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, provider := range cfg.RuleProviders {
+				if err := provider.Initial(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for host, want := range map[string]string{
+				"mmbiz.qpic.cn": tc.want, "mmbiz.qlogo.cn": "DIRECT",
+				"unrelated.qlogo.cn": "PROXY", "mmbiz.qpic.cn.example.com": "PROXY",
+				"unclassified-example.cn": "PROXY", "www.google.com": "PROXY",
+			} {
+				got := ""
+				for _, rule := range cfg.Rules {
+					if ok, target := rule.Match(&C.Metadata{Host: host}, C.RuleMatchHelper{}); ok {
+						got = target
+						break
+					}
+				}
+				if got != want {
+					t.Errorf("route %s: got %s want %s", host, got, want)
+				}
+			}
+			for _, host := range []string{"mmbiz.qpic.cn", "mmbiz.qlogo.cn"} {
+				want := "DIRECT"
+				if host == "mmbiz.qpic.cn" && tc.want != "DIRECT" {
+					want = "PROXY"
+				}
+				found := false
+				for _, policy := range cfg.DNS.NameServerPolicy {
+					if policy.Domain != host {
+						continue
+					}
+					found = true
+					for _, ns := range policy.NameServers {
+						if ns.ProxyName != want {
+							t.Errorf("DNS %s leaked to %s, want %s", host, ns.ProxyName, want)
+						}
+					}
+				}
+				if !found {
+					t.Fatalf("missing DNS policy for %s", host)
+				}
+			}
+		})
+	}
+}
+
 func TestManagedDNSExceptionsPrecedeCNAndOverlapStaysProtected(t *testing.T) {
 	src := strings.Replace(validMinimal, "  - MATCH,PROXY", `  - DOMAIN-SUFFIX,example.com,PROXY
   - DOMAIN,private.example.com,DIRECT
@@ -124,10 +190,13 @@ func TestManagedDNSExceptionsPrecedeCNAndOverlapStaysProtected(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := cfg.DNS.NameServerPolicy
-	if len(p) != 4 || p[len(p)-1].Matcher == nil {
+	if len(p) != 4+len(domesticAppHosts) || p[len(p)-1].Matcher == nil {
 		t.Fatal("CN matcher must follow explicit domains")
 	}
 	for _, policy := range p[:len(p)-1] {
+		if policy.Domain == "mmbiz.qpic.cn" || policy.Domain == "mmbiz.qlogo.cn" {
+			continue
+		}
 		for _, server := range policy.NameServers {
 			if server.ProxyName != "PROXY" {
 				t.Fatal("conflicting domain leaked to DIRECT DNS")

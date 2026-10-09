@@ -2,6 +2,16 @@
 
 来源：首个原型（`av:dllg404i`）在一加 12（PJD110，ColorOS 16 / Android 16 / API 36）上的实测。
 
+## 2026-10-09：点击后保持快捷设置面板展开
+
+用户确认的交互要求：连接与断开只更新磁贴状态，面板保持展开，底下的 App 不跳回桌面。此前为了自动生成最近任务卡片，已授权的启动分支调用 `startActivityAndCollapse`，透明 `TileLaunchActivity` 又执行 `moveTaskToBack`；因此收起面板是代码主动触发的结果。
+
+已授权分支改为在 `onClick` 直接调用 `PetrelVpnService.start`，停止分支保持直接停止；状态继续由面板监听期的 StateFlow 更新。只有需要 VPN 授权时才使用 `startActivityAndCollapse`。后台启动若被系统拒绝，记录异常类型并给出可见错误，不回退到会切换界面的 Activity。既有任务卡片保留，已移除的卡片不自动重建；这是优先满足面板不收起的行为选择。旧 Activity 保留兼容旧任务，以下透明入口与任务栈验证均属历史方案，不能作为当前正常磁贴启动路径。
+
+实测：一加 12 上使用 `input tap` 点击面板内真实磁贴，完成连接 → 断开 → 再连接，以及 force-stop 后展开面板冷启动。四种状态均保持 `NotificationShade` 焦点，底下始终是系统设置 Activity；TUN 与磁贴开启 / 关闭一致，连接与冷启动后 Google 返回 204。force-stop 前后既有 Petrel 最近任务卡片均在，原 YAML 哈希未变，仍选 IIJ，无本包崩溃。独立 Android 15 模拟器验证首次点击正常打开 VPN 授权弹框、取消后保持关闭；授权后无配置的启动失败也不收起面板，磁贴回到未连接。104 项 JVM 测试与构建、双设备 smoke 通过；模拟器未配置 tailnet，测试结束后删除。锁屏场景与其他 ROM 本次未测。
+
+Android 的 [Quick Settings 官方说明](https://developer.android.com/develop/ui/views/quicksettings-tiles) 允许点击触发后台工作；能否实际启动前台服务仍以目标 Android / ROM 实测为准，不能仅凭编译通过推断。
+
 ## 磁贴冷启动：直接起前台服务就能走通
 
 - `am force-stop com.robb3n.petrel` 之后，用 `cmd statusbar click-tile com.robb3n.petrel/.PetrelTileService` 点磁贴，日志是 `tile: started vpn service directly`：从 TileService 直接 `startForegroundService` 没有被系统拒绝，不需要走透明 `TileLaunchActivity` 那条退路。约 4 秒后 tailnet 回到 Running，代理和 tailnet 探针都通。

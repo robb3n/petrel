@@ -130,7 +130,7 @@ func TestDesktopBindingsAreRemoved(t *testing.T) {
 	if findProxy(t, cfg, "landing")["dialer-proxy"] != "front" {
 		t.Errorf("other proxy fields should be kept")
 	}
-	if rules, _ := cfg["rules"].([]any); len(rules) != 3 || rules[0] != "IP-CIDR,100.64.0.0/10,ts,no-resolve" || rules[2] != "MATCH,landing" {
+	if rules, _ := cfg["rules"].([]any); len(rules) != 3+len(domesticAppHosts) || rules[0] != "IP-CIDR,100.64.0.0/10,ts,no-resolve" || rules[len(rules)-1] != "MATCH,landing" {
 		t.Errorf("explicit rules should retain priority around the domestic rule, got %v", cfg["rules"])
 	}
 }

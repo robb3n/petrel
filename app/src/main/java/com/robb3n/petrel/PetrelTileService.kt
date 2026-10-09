@@ -14,8 +14,8 @@ import kotlinx.coroutines.launch
 
 /**
  * 快捷开关：App 冷启动（被强制停止、从没打开过）时按一下也要能直接起 VPN。
- * 未授权时拉主界面走一次系统授权；已授权时一律经 TileLaunchActivity 起服务：它留在 Petrel 的任务里，
- * 最近任务里才有卡片（直接 startForegroundService 虽然能冷启动，但不产生卡片）。
+ * 未授权时拉主界面走一次系统授权；已授权时直接起前台服务，保持快捷设置面板与底下的 App 不变。
+ * 不为创建最近任务卡片而启动 Activity，也不在后台启动被系统拒绝时悄悄收起面板。
  */
 class PetrelTileService : TileService() {
     private val scope = MainScope()
@@ -49,14 +49,12 @@ class PetrelTileService : TileService() {
             launch(Intent(this, MainActivity::class.java).putExtra(MainActivity.EXTRA_START, true), RequestCodes.TILE_CONSENT)
             return
         }
-        PLog.i("tile: launching TileLaunchActivity")
-        // 任务还在最近任务里时，光带 NEW_TASK 只会把旧任务带回前台、不建新实例（ColorOS 上 VPN 因此不起）。
-        // CLEAR_TOP + SINGLE_TOP：栈里有 TileLaunchActivity 就清掉它上面的界面并投递 onNewIntent，没有就在任务顶上新建。
-        launch(
-            Intent(this, TileLaunchActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
-            RequestCodes.TILE_LAUNCH,
-        )
+        PLog.i("tile: starting vpn service directly")
+        try {
+            PetrelVpnService.start(this)
+        } catch (e: RuntimeException) {
+            CoreBridge.fail("无法后台启动，请打开 Petrel 后连接", "tile start failed: ${e.javaClass.simpleName}")
+        }
     }
 
     private fun launch(intent: Intent, requestCode: Int) {

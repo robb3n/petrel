@@ -13,6 +13,7 @@
 - 默认 DNS 为 Cloudflare / Google 的 IP 地址 DoH，通过主代理出站；不使用明文 fallback、系统 DNS、原配置的 nameserver-policy 或 direct-nameserver。未知域名同样走代理 DNS，代理故障时不自动降级直连。
 - 默认解析器与代理服务器域名的引导解析使用阿里 IP 地址 DoH，独立于代理；这部分域名会被直连 DNS 服务商看到。
 - 国内域名 DNS 与路由引用同一份随包固定的 `petrel-cn-domains` MRS。DNS 使用阿里 DoH DIRECT；路由在原显式规则之后、首个 `GEOIP,CN` 或 `MATCH` / `FINAL` 之前插入国内 DIRECT 规则。保留原来的规则顺序与内网 / tailnet 规则。
+- 地理规则未覆盖的已验证应用端点由 `domesticAppHosts` 补充，目前仅 `mmbiz.qpic.cn`、`mmbiz.qlogo.cn` 两个精确域名。单一列表同时生成直连 DoH 与 DOMAIN 路由，紧随原显式规则、位于国内集合之前；原显式代理 / 拒绝规则优先，代理域名重叠时 DNS 仍保守地走代理。不把整个共享 CDN 后缀或全部 `.cn` 自动划为国内，不改上游 MRS 与来源清单。该默认值同样经过共同加载层，原始模式不应用。
 - 原来的 `hosts`、IPv6 开关、fake-IP 范围与过滤保留。默认开启 fake-IP、关闭 HTTP/3 优先，避免多一条 QUIC 连接复用路径。
 - 简单 `DOMAIN` / `DOMAIN-SUFFIX` 的 DIRECT 例外转换为直连 DoH，其余出站的域名例外使用主代理 DoH，均排在国内集合之前。DNS 的域名匹配与路由的顺序匹配不是同一个引擎：直连与代理的域名范围重叠时，DNS 保守地选代理，避免更具体的 DIRECT 域名条目覆盖在前的代理规则。复杂的逻辑、进程、IP、端口规则仍只负责连接路由，不承诺完整镜像任意自定义分流。需要精确维护私有解析策略的配置可使用原始模式。
 - `petrel-cn-domains` 是保留 provider 名，托管模式下撞名就报错。资源只写 App 私有 `mihomo/rules/` 的内容寻址文件，原子替换；不下载规则、不修改用户原文件。导入失败最多安装固定资源，不更改正在运行的配置。

@@ -28,6 +28,12 @@ var cnRules []byte
 // Derive the content-addressed path; updates no longer require editing Go literals.
 var cnRulePath = "rules/petrel-cn-domains-" + fmt.Sprintf("%x", sha256.Sum256(cnRules))[:8] + ".mrs"
 
+// Audited app endpoints missing from the upstream geographic snapshot. Keep
+// exact hosts: a shared CDN suffix is not automatically a domestic service.
+// This single list supplies both DNS policy and connection routing. Explicit
+// user rules retain priority; see docs/lessons/dns-policy.md for evidence.
+var domesticAppHosts = [...]string{"mmbiz.qpic.cn", "mmbiz.qlogo.cn"}
+
 // applyDNSPolicy runs for both validation and startup, on a freshly decoded copy.
 // The imported file is never rewritten. Original mode is an explicit escape hatch
 // for split-horizon/private DNS or configurations that need their own DNS policy.
@@ -104,6 +110,10 @@ func applyDNSPolicy(cfg map[string]any) error {
 	policy := map[string]any{}
 	protected := map[string]bool{}
 	direct := map[string]bool{}
+	for _, host := range domesticAppHosts {
+		policy[host] = []any{directDoH}
+		direct[host] = true
+	}
 	rules, ok := cfg["rules"].([]any)
 	if !ok && cfg["rules"] != nil {
 		return fmt.Errorf("rules: expected a list")
@@ -181,6 +191,9 @@ func applyDNSPolicy(cfg map[string]any) error {
 		}
 	}
 	merged := append([]any{}, rules[:insert]...)
+	for _, host := range domesticAppHosts {
+		merged = append(merged, "DOMAIN,"+host+",DIRECT")
+	}
 	merged = append(merged, "RULE-SET,"+cnProvider+",DIRECT")
 	cfg["rules"] = append(merged, rules[insert:]...)
 	return nil

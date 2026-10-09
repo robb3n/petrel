@@ -32,7 +32,7 @@ Android 常驻代理 App：把 mihomo 内核和一个内置 tailnet 节点（tsn
 - **快捷开关（头号需求）**：
   - 冷启动：App 被强制停止、甚至从没打开过，按一下开关 VPN 就起来，tailnet 和代理都通，不弹界面。唯一例外是首次 VPN 授权时的系统弹框。
   - 状态如实：开、关、连接中。被别的 VPN 顶掉时开关同步变为关闭。
-- **后台可见**：从快捷开关启动后，最近任务里也要有它的卡片，方便上锁防杀。单纯从 TileService 直接起服务不会产生任务卡片，所以开关一律拉起不显示界面的透明 `TileLaunchActivity`：它起服务后 `moveTaskToBack` 但不 finish，让任务留在最近任务里；任务回前台时（点卡片、桌面图标）再切到 `MainActivity`。模拟器与 ColorOS 真机上都实测走通：卡片锁定后一键清理、上划都杀不掉，没锁定会连同 VPN 一起被杀。任务还在时再点磁贴，靠 `CLEAR_TOP | SINGLE_TOP` 加 `onNewIntent` 才能起服务。见 `docs/lessons/tile-and-device-testing.md`。
+- **快捷面板与最近任务**：已授权时，快捷开关直接启动 / 停止 VPN 服务，保持下拉面板展开，不切换底下的 App；仅首次 VPN 授权需要打开界面。已有最近任务卡片保留，但不为创建新卡片而拉起透明 Activity；卡片已被移除时，磁贴后台启动不会自动重建它。旧版 `TileLaunchActivity` 暂留，兼容升级前残留任务的恢复。ColorOS 卡片锁定后可防一键清理，未锁定可能连同 VPN 一起被杀。行为变更与验证见 `docs/lessons/tile-and-device-testing.md`。
 - 兼容系统设置里的「始终开启的 VPN」，开机由系统拉起。
 - **配置**：导入本地 YAML，和桌面端一样手工维护，存放在 App 私有目录。机队主机名写在配置的 `hosts:` 里，不依赖 MagicDNS。节点上可写 Petrel 自己的 `petrel-via: <名字>`，标注 mihomo 看不见的中转（如服务商的国内入口），只用于在链路与链路底座里显示；注入时读出并删掉，不交给内核。
 - **自动 DNS 策略**：加载时默认应用 rule 模式、国外 DoH 随主代理、国内 DNS / 路由共用随包规则快照；原始 YAML 保留，已有配置升级后也适用。`petrel-dns.proxy` 指定非标准主代理，`petrel-dns.mode: original` 保留特殊 DNS 配置。界面手动切换关闭经过该组的连接并同步刷新真实 DNS 缓存，不清 fake-IP；托管模式的会话观察器每 2 秒检查实际代理依赖，为 REST / 自动切换补充仅 DNS 的清理（最终一致）。边界与验证见 `docs/spec/dns-policy.md`；动 DNS 先读它与 `docs/lessons/dns-policy.md`。
