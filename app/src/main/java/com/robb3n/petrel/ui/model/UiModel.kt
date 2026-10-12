@@ -287,6 +287,8 @@ data class HomeUi(
     val tailnetEnd: TailnetEnd,
     val config: ConfigSummary,
     val importing: Boolean,
+    /** 「隐藏后台」开关：任务不进最近任务。 */
+    val hideRecents: Boolean = false,
 ) {
     /** 出口延迟的显示：刷新中（与节点页的「测速中」同一个状态）显示「…」并用 Idle 样式；出口用不了时「不可用」。 */
     val exitView: DelayView
@@ -301,6 +303,9 @@ data class HomeUi(
     /** 「导入 YAML…」按钮（没有配置时的首页）。 */
     val importLabel: String get() = importButtonLabel(importing)
 }
+
+/** 「隐藏后台」行的副文字（折行）。ColorOS 的「清除」照样杀没上锁的隐藏任务，所以要写明先锁定。 */
+const val HIDE_RECENTS_SUB = "不出现在最近任务里。先锁定卡片再打开，才防得住一键清理"
 
 /** 导入按钮的文字：校验中「校验中…」，否则「导入 YAML…」。首页与配置页共用。 */
 fun importButtonLabel(busy: Boolean): String = if (busy) "校验中…" else "导入 YAML…"
@@ -477,6 +482,8 @@ class PetrelActions(
     /** 设置里的两个开关；关掉最后一个开着的不生效。VPN 开着时会重连一次。 */
     val setTailnetOn: (Boolean) -> Unit,
     val setProxyOn: (Boolean) -> Unit,
+    /** 连接页的「隐藏后台」开关：立刻落到现有任务上。 */
+    val setHideRecents: (Boolean) -> Unit,
     val openNodes: () -> Unit,
     val openTailnet: () -> Unit,
     val openConfig: () -> Unit,

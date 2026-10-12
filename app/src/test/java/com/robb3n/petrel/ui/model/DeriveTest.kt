@@ -471,6 +471,11 @@ class HomeTest {
         assertEquals("校验中…", buildHome(CoreState.STOPPED, none, ImportUi(busy = true), emptyList(), null, HOST, zone = utc).importLabel)
     }
 
+    @Test fun hideRecentsDefaultsOffAndFollowsPref() {
+        assertEquals(false, buildHome(state(), cfg, ImportUi(), groups, null, HOST, zone = utc).hideRecents)
+        assertEquals(true, buildHome(state(), cfg, ImportUi(), groups, null, HOST, zone = utc, hideRecents = true).hideRecents)
+    }
+
     @Test fun updatedWhenNotImportedThroughUi() {
         val pushed = ConfigInfo(true, "config.yaml", 0L, false)
         assertEquals("更新", configSummary(pushed, utc).verb)

@@ -34,6 +34,7 @@ import com.robb3n.petrel.PetrelVpnService
 import com.robb3n.petrel.TailnetHostname
 import com.robb3n.petrel.TailnetRepository
 import com.robb3n.petrel.UiPrefs
+import com.robb3n.petrel.applyHideRecents
 import com.robb3n.petrel.copyToClipboard
 import com.robb3n.petrel.ui.model.PetrelActions
 import com.robb3n.petrel.ui.model.Tab
@@ -89,6 +90,7 @@ fun PetrelApp(
     val tailnet by TailnetRepository.status.collectAsStateWithLifecycle()
     val tone by UiPrefs.tone.collectAsStateWithLifecycle()
     val exitIpPlace by UiPrefs.exitIp.collectAsStateWithLifecycle()
+    val hideRecents by UiPrefs.hideRecents.collectAsStateWithLifecycle()
     val mode by ConnPrefs.mode.collectAsStateWithLifecycle()
     val exitIp by ExitIpRepository.current.collectAsStateWithLifecycle()
     val ipCache by ExitIpRepository.cache.collectAsStateWithLifecycle()
@@ -188,6 +190,10 @@ fun PetrelApp(
             // VPN 开着时改模式：重启服务生效（服务在 worker 上看 running，没在跑就什么也不做）
             setTailnetOn = { on -> if (ConnPrefs.setTailnet(on) && CoreBridge.state.value.active) PetrelVpnService.restart(ctx) },
             setProxyOn = { on -> if (ConnPrefs.setProxy(on) && CoreBridge.state.value.active) PetrelVpnService.restart(ctx) },
+            setHideRecents = { on ->
+                UiPrefs.setHideRecents(on)
+                applyHideRecents(ctx, on)
+            },
             openNodes = { goTab(Tab.Nodes) },
             openTailnet = { goTab(Tab.Tailnet) },
             openConfig = { push(Routes.CONFIG) },
@@ -204,8 +210,11 @@ fun PetrelApp(
                 HorizontalPager(pager.state, Modifier.fillMaxSize(), beyondViewportPageCount = pager.tabs.size - 1) { page ->
                     when (pager.tabs[page]) {
                         Tab.Home -> skin.Home(
-                            remember(s, config, import, groups, tailnet, testing, mode, exitIp, exitIpPlace) {
-                                buildHome(s, config, import, groups, tailnet, hostname, testing, prefMode = mode, exitIp = exitIp, place = exitIpPlace)
+                            remember(s, config, import, groups, tailnet, testing, mode, exitIp, exitIpPlace, hideRecents) {
+                                buildHome(
+                                    s, config, import, groups, tailnet, hostname, testing,
+                                    prefMode = mode, exitIp = exitIp, place = exitIpPlace, hideRecents = hideRecents,
+                                )
                             },
                             actions,
                         )

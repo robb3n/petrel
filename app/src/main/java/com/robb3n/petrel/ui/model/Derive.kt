@@ -275,6 +275,7 @@ fun buildHome(
     prefMode: ConnMode = ConnMode.Both,
     exitIp: CurrentExitIp? = null,
     place: ExitIpPlace = ExitIpPlace.Card,
+    hideRecents: Boolean = false,
 ): HomeUi {
     val mode = s.mode ?: prefMode
     val first = groups.firstOrNull()
@@ -308,6 +309,7 @@ fun buildHome(
         tailnetEnd = row.end,
         config = configSummary(info, zone),
         importing = import.busy,
+        hideRecents = hideRecents,
     )
 }
 

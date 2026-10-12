@@ -69,4 +69,5 @@ object Ms {
     val sync: ImageVector @Composable get() = ImageVector.vectorResource(R.drawable.ms_sync)
     val tune: ImageVector @Composable get() = ImageVector.vectorResource(R.drawable.ms_tune)
     val tuneFill: ImageVector @Composable get() = ImageVector.vectorResource(R.drawable.ms_tune_fill)
+    val visibilityOff: ImageVector @Composable get() = ImageVector.vectorResource(R.drawable.ms_visibility_off)
 }

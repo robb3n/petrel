@@ -65,6 +65,7 @@ class TileLaunchActivity : Activity() {
         }
         PLog.i("tile launch: starting vpn from activity")
         PetrelVpnService.start(this)
+        applyHideRecents(this)
         moveTaskToBack(true)
     }
 }

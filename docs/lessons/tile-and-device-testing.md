@@ -119,3 +119,22 @@ a35（google_apis 镜像）上 `appops set com.robb3n.petrel ACTIVATE_VPN allow`
   - `MainActivity.onCreate`：`savedInstanceState == null` 才处理 `EXTRA_START`。
   - 已经存活的实例收到的新磁贴请求走 `onNewIntent`，不受影响。
 - 回归：改这两个 Activity 之后要把上文「修完后……12 个场景」重跑一遍，并补一条：VPN 关着时切明暗（Activity 在后台）、或杀进程后点卡片，VPN 必须保持关闭。
+
+## 隐藏后台（`excludeFromRecents`）在 ColorOS 上要先锁定卡片
+
+2026-10-12，`963399b` 之上的工作树：连接页加了「隐藏后台」开关（`UiPrefs.hideRecents`，默认关），用 `ActivityManager.AppTask.setExcludeFromRecents` 把任务标成不进最近任务。想要的是李跳跳那种「前台服务防杀 + 隐藏后台防清理」。
+
+机制本身成立（a35b 与一加 12 都验过）：
+- 打开开关后任务的 base intent 多出 `0x00800000`（`FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS`）。App 还在前台时任务仍在 `dumpsys activity recents` 的 `Visible recent tasks` 里（系统照例让当前任务可见）；回桌面后就不在了，ColorOS 的多任务界面里也没有卡片。任务本身还在，点桌面图标回到同一个任务。
+- 标记记在任务上：后台杀进程（`am kill`）再点图标，标记还在；`MainActivity.onResume` 每次再落一遍，兜住新建任务和 base intent 被换掉的情况。关掉开关，标记清掉，卡片回来。
+- 隐藏着的时候 VPN 照常：前台服务、TUN 都在，Google 返回 204。
+
+**但在一加 12（ColorOS 16）上，多任务界面的「清除」照样杀掉隐藏的 Petrel。** 当时任务已隐藏、VPN 在跑（前台服务）。系统日志是 `Force stopping com.robb3n.petrel … o-stop(2)`，落盘日志里下一次进程启动记的死因是 `REASON_OTHER … importance=125 … due to o-stop(2)`；清除之后任务也没了，VPN、通知一起消失，Petrel 自己没有记 `vpn stopped`（来不及）。同一时刻其它可见任务从 7 个变成 1 个，对得上是一次「清除」。
+
+所以 ColorOS 的清除是按包 force-stop，不看任务在不在最近任务里；前台服务也挡不住（上文「ColorOS 真机补测」里没上锁的卡片同样是连 VPN 一起杀）。单靠隐藏反而更糟：没有卡片就没法上锁。
+
+**先锁定卡片、再打开隐藏，就扛得住。** 人在手机上照这个顺序做了一遍（开关关着时卡片可见 → 卡片菜单「锁定」→ 打开「隐藏后台」→ 回桌面 → 点「清除」）：17:06:00 那次清除 force-stop 了 4 个包（其中一个同样带前台服务），没有 Petrel；Petrel 的 pid 没变，前台服务、TUN 都在，Google 204，任务仍在、仍不可见，落盘日志里没有新的进程启动。可见锁不随卡片隐藏而失效。各一次试验，没有重复。
+
+所以界面上的说明写的是「先锁定卡片再打开」。没有验的：锁在重启手机、覆盖安装、任务被系统回收重建之后还在不在；ColorOS 把锁记在哪（按包还是按任务）没查到。锁要是丢了，得先关掉隐藏让卡片出来才能重新锁。
+
+顺带的教训：真机上人可能正拿着手机在用。这次脚本按上一张截图的坐标去点「清除」时，人已经自己清过一次，多任务界面是空的。点之前要重新看一眼当前界面（`uiautomator dump` 取控件 bounds 比照坐标可靠；`adb shell` 在 `ssh … bash -s` 的 heredoc 里要接 `</dev/null`，否则会把脚本剩下的部分吃掉）。

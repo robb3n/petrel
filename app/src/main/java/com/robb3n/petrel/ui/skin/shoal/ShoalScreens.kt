@@ -69,6 +69,7 @@ import com.robb3n.petrel.ui.model.OsKind
 import com.robb3n.petrel.ui.model.PetrelActions
 import com.robb3n.petrel.ui.model.SettingsUi
 import com.robb3n.petrel.ui.model.FIRST_USE_STEPS
+import com.robb3n.petrel.ui.model.HIDE_RECENTS_SUB
 import com.robb3n.petrel.ui.model.NodeStatusKind
 import com.robb3n.petrel.ui.model.StatusTone
 import com.robb3n.petrel.ui.model.breakAfterHyphens
@@ -543,6 +544,11 @@ private fun LinksIsle(ui: HomeUi, a: PetrelActions) {
                 leading = { Tile(Ms.tune, TileTone.Brown) },
                 onClick = a.openSettings, role = Role.Button,
                 trailing = { RowEnd(icon = Ms.chevronRight) },
+            )
+            ListRow(
+                "隐藏后台", sub = HIDE_RECENTS_SUB, subWrap = true,
+                leading = { Tile(Ms.visibilityOff, TileTone.Sage) },
+                trailing = { Sw(checked = ui.hideRecents, onClick = { a.setHideRecents(!ui.hideRecents) }, label = "隐藏后台") },
             )
         }
     }

@@ -35,13 +35,14 @@ fun resolveDark(tone: UiTone, systemDark: Boolean): Boolean = when (tone) {
 }
 
 /**
- * 界面偏好，SharedPreferences 文件 `ui`：`tone`、`exit_ip` 两个键（旧版的 `skin` 键已不再读）。
+ * 界面偏好，SharedPreferences 文件 `ui`：`tone`、`exit_ip`、`hide_recents` 三个键（旧版的 `skin` 键已不再读）。
  * 进程里第一次访问时同步读一次（文件很小），保证第一帧就是对的明暗，不闪；写入用 `apply()`。
  */
 object UiPrefs {
     private const val FILE = "ui"
     private const val KEY_TONE = "tone"
     private const val KEY_EXIT_IP = "exit_ip"
+    private const val KEY_HIDE_RECENTS = "hide_recents"
 
     private val prefs: SharedPreferences by lazy {
         val app = checkNotNull(App.instance) { "UiPrefs read before Application.onCreate" }
@@ -53,8 +54,13 @@ object UiPrefs {
         MutableStateFlow(ExitIpPlace.fromKey(prefs.getString(KEY_EXIT_IP, null)))
     }
 
+    private val _hideRecents: MutableStateFlow<Boolean> by lazy { MutableStateFlow(prefs.getBoolean(KEY_HIDE_RECENTS, false)) }
+
     val tone: StateFlow<UiTone> get() = _tone
     val exitIp: StateFlow<ExitIpPlace> get() = _exitIp
+
+    /** 「隐藏后台」：任务不进最近任务（默认关）。落到任务上由 [applyHideRecents] 做。 */
+    val hideRecents: StateFlow<Boolean> get() = _hideRecents
 
     fun setTone(tone: UiTone) {
         _tone.value = tone
@@ -64,5 +70,10 @@ object UiPrefs {
     fun setExitIp(place: ExitIpPlace) {
         _exitIp.value = place
         prefs.edit().putString(KEY_EXIT_IP, place.key).apply()
+    }
+
+    fun setHideRecents(hide: Boolean) {
+        _hideRecents.value = hide
+        prefs.edit().putBoolean(KEY_HIDE_RECENTS, hide).apply()
     }
 }

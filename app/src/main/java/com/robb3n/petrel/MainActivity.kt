@@ -109,6 +109,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        applyHideRecents(this)
         // 配置可能在界面打开期间被推进来（scripts/push-config.sh），回到前台时重新检查
         ConfigRepository.refresh(this)
     }
