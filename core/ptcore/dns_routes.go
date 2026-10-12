@@ -18,6 +18,13 @@ import (
 // not an atomic barrier around external PUTs or upstream health-check switches.
 const dnsRouteInterval = 2 * time.Second
 
+// A DoH dial that began on the old route can register after the sweep that
+// noticed the change. When the change is one a connection chain cannot show
+// (see reconcile), everything registered within this window is swept once
+// more. One TCP timeout for the front hop plus one for the node's own
+// handshake; also the DoH client's own dial timeout.
+const dnsLateDialWindow = 2 * C.DefaultTCPTimeout
+
 // All accesses are under lifecycleMu, including the synchronous UI path.
 var activeDNSRoutes *dnsRouteWatch
 
@@ -31,6 +38,20 @@ type dnsRouteSnapshot map[string]dnsRouteHop
 type dnsRouteWatch struct {
 	root string
 	last dnsRouteSnapshot
+	// lateUntil is non-zero while a late-dial window is open: the first round at
+	// or after it closes managed DoH trackers registered up to that instant.
+	lateUntil time.Time
+	now       func() time.Time // nil = time.Now; tests move the clock
+}
+
+// chain is what mihomo records for a connection through root on this route:
+// leaf -> inner groups -> root, following each unique selection.
+func (r dnsRouteSnapshot) chain(root string) C.Chain {
+	var names C.Chain
+	for name := root; name != "" && len(names) <= len(r); name = r[name].next {
+		names = append(C.Chain{name}, names...)
+	}
+	return names
 }
 
 // Called only after injectConfig succeeded. Reuse the exact main-proxy choice;
@@ -117,13 +138,32 @@ func staleDNSChain(chain C.Chain, route dnsRouteSnapshot) bool {
 func (w *dnsRouteWatch) reconcile(all map[string]C.Proxy, manager *statistic.Manager, clear func()) (changed bool, closed int) {
 	now := snapshotDNSRoute(w.root, all)
 	changed = !maps.Equal(w.last, now)
+	at := time.Now()
+	if w.now != nil {
+		at = w.now()
+	}
+	// A selection change on the main path leaves old dials with a chain the
+	// later rounds recognise. Anything else (a dialer-proxy dependency, a
+	// same-name replacement, balancing members) keeps the chain names intact:
+	// the front hop is a separate tracker to the node's server, and a tracker
+	// only records when the dial finished, not when it began. No test tells such
+	// a late old dial from a fresh one, so sweep that window once when it ends.
+	if changed && !staleDNSChain(w.last.chain(w.root), now) {
+		w.lateUntil = at.Add(dnsLateDialWindow)
+	}
+	late := !w.lateUntil.IsZero() && !at.Before(w.lateUntil)
 	manager.Range(func(t statistic.Tracker) bool {
-		if managedDNSTracker(t.Info(), w.root) && (changed || staleDNSChain(t.Info().Chain, now)) {
+		info := t.Info()
+		if managedDNSTracker(info, w.root) &&
+			(changed || staleDNSChain(info.Chain, now) || (late && !info.Start.After(w.lateUntil))) {
 			_ = t.Close()
 			closed++
 		}
 		return true
 	})
+	if late {
+		w.lateUntil = time.Time{}
+	}
 	if changed || closed > 0 {
 		clear()
 	}
@@ -164,8 +204,12 @@ func pollDNSRoutes(ctx context.Context, w *dnsRouteWatch, gen int) bool {
 		return false
 	}
 	changed, closed := w.reconcile(tunnel.Proxies(), statistic.DefaultManager, clearDNSCache)
-	if changed || closed > 0 {
+	if changed {
 		logf("info", "dns route changed: refreshed cache, closed %d managed DNS connections", closed)
+	} else if closed > 0 { // same route: old-path dials that registered late (stale chain, or the window's sweep)
+		logf("info", "dns route: refreshed cache, closed %d late managed DNS connections", closed)
+	}
+	if changed || closed > 0 {
 		bumpGroups(gen, currentExit(), true)
 	}
 	return true

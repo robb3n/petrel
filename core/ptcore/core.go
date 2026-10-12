@@ -182,7 +182,7 @@ func Start(homeDir string, configPath string, tunFd int, hostname string, mode s
 	if err != nil {
 		return fmt.Errorf("generate secret: %w", err)
 	}
-	injected, warnings, viaMap, err := injectConfig(user, tunFd, socksAddr, socksPass, fallbackSecret)
+	injected, warnings, viaMap, err := injectConfigFor(user, tunFd, socksAddr, socksPass, fallbackSecret, mode != ModeTailnet)
 	if err != nil {
 		// 带上前缀：Kotlin 侧日志只记第一个冒号之前的部分，后面的配置内容（节点名等）只给界面
 		return fmt.Errorf("inject config: %w", err)

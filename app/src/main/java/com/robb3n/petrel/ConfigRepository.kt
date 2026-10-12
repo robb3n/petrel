@@ -40,6 +40,14 @@ data class ImportError(val box: String, val hint: String = "") {
 
 data class ImportUi(val busy: Boolean = false, val error: ImportError? = null)
 
+/**
+ * 配置或 GeoIP 库换了之后要不要重启 VPN。在跑才需要。内核跑的是仅 tailnet 时，这个模式两样都不读，只剩一种情况要重启：
+ * 设置里已经拨开了「代理」（没有配置时只存了偏好，[pref] 不再是仅 tailnet），而且现在有配置了，导入配置正要靠这次重启切过去。
+ * 设置里也是仅 tailnet 时，重启只会让 tailnet 断几秒；还没有配置时（只换了 GeoIP 库），重启会因为没有配置而启动失败，把 tailnet 也断掉。
+ */
+internal fun restartAfterImport(state: CoreState, pref: ConnMode, configPresent: Boolean): Boolean =
+    state.active && !(state.mode == ConnMode.Tailnet && (pref == ConnMode.Tailnet || !configPresent))
+
 /** Country.mmdb 的状态；null（尚未算出）时界面显示 —。 */
 enum class GeoIpStatus { Ready, Corrupt, Missing }
 
@@ -141,7 +149,7 @@ object ConfigRepository {
         }
         refresh(app)
 
-        val restart = CoreBridge.state.value.active
+        val restart = restartAfterImport(CoreBridge.state.value, ConnPrefs.mode.value, configPresent = true)
         toast(app, if (restart) "已导入 $name，正在重启 VPN" else "已导入 $name")
         if (restart) PetrelVpnService.restart(app)
         return null
@@ -227,7 +235,8 @@ object ConfigRepository {
             return "保存失败：${e.message}"
         }
         Ptcore.reloadGeoIP()
-        if (CoreBridge.state.value.active) PetrelVpnService.restart(app)
+        val configPresent = File(app.filesDir, CONFIG_FILE).exists()
+        if (restartAfterImport(CoreBridge.state.value, ConnPrefs.mode.value, configPresent)) PetrelVpnService.restart(app)
         return "已替换 GeoIP 库"
     }
 

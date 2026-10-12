@@ -35,7 +35,7 @@ Android 常驻代理 App：把 mihomo 内核和一个内置 tailnet 节点（tsn
 - **快捷面板与最近任务**：已授权时，快捷开关直接启动 / 停止 VPN 服务，保持下拉面板展开，不切换底下的 App；仅首次 VPN 授权需要打开界面。已有最近任务卡片保留，但不为创建新卡片而拉起透明 Activity；卡片已被移除时，磁贴后台启动不会自动重建它。旧版 `TileLaunchActivity` 暂留，兼容升级前残留任务的恢复。ColorOS 卡片锁定后可防一键清理，未锁定可能连同 VPN 一起被杀。连接页的「隐藏后台」开关（默认关）让任务不进最近任务；ColorOS 上它自己防不了清理，要先锁定卡片再打开。行为变更与验证见 `docs/lessons/tile-and-device-testing.md`。
 - 兼容系统设置里的「始终开启的 VPN」，开机由系统拉起。
 - **配置**：导入本地 YAML，和桌面端一样手工维护，存放在 App 私有目录。机队主机名写在配置的 `hosts:` 里，不依赖 MagicDNS。节点上可写 Petrel 自己的 `petrel-via: <名字>`，标注 mihomo 看不见的中转（如服务商的国内入口），只用于在链路与链路底座里显示；注入时读出并删掉，不交给内核。
-- **自动 DNS 策略**：加载时默认应用 rule 模式、国外 DoH 随主代理、国内 DNS / 路由共用随包规则快照；原始 YAML 保留，已有配置升级后也适用。`petrel-dns.proxy` 指定非标准主代理，`petrel-dns.mode: original` 保留特殊 DNS 配置。界面手动切换关闭经过该组的连接并同步刷新真实 DNS 缓存，不清 fake-IP；托管模式的会话观察器每 2 秒检查实际代理依赖，为 REST / 自动切换补充仅 DNS 的清理（最终一致）。边界与验证见 `docs/spec/dns-policy.md`；动 DNS 先读它与 `docs/lessons/dns-policy.md`。
+- **自动 DNS 策略**：加载时默认应用 rule 模式、国外 DoH 随主代理、国内 DNS / 路由共用随包规则快照；原始 YAML 保留，已有配置升级后也适用。配置写了 `mode: global` / `direct` 时拒绝加载（改成 `rule`，或用下面的原始模式），不静默改写。`petrel-dns.proxy` 指定非标准主代理，`petrel-dns.mode: original` 保留特殊 DNS 配置。界面手动切换关闭经过该组的连接并同步刷新真实 DNS 缓存，不清 fake-IP；托管模式的会话观察器每 2 秒检查实际代理依赖，为 REST / 自动切换补充仅 DNS 的清理（最终一致）。边界与验证见 `docs/spec/dns-policy.md`；动 DNS 先读它与 `docs/lessons/dns-policy.md`。
 - **节点操控**：沿用 MihomoBar 那套——PROXY 组切换、测延迟。
 - **tailnet 面板**：
   - 登录 / 登出：配置里不写 auth-key，tsnet 通知里的登录链接做成按钮。
@@ -49,7 +49,7 @@ Android 常驻代理 App：把 mihomo 内核和一个内置 tailnet 节点（tsn
 - 配置文件、节点凭据、tailnet 状态与任何密钥**永不进仓库**。仓库按公开的标准管理：内嵌 mihomo 决定了许可证只能是 GPL-3（本项目取 GPL-3.0-or-later）。
 - 不 fork mihomo。内核问题先找上游，或在 Go 层外围绕开。
 - App 名与文案不使用 "Tailscale" 商标。
-- 日志、check 复述、lessons 和提交里不得出现配置内容、secret、节点凭据或完整的登录 URL；唯一例外是 Go 层只打在设备 logcat 里的 `tailnet login URL:`，它是取登录链接的渠道。（Kotlin 侧的 `state` 日志把 `loginURL` 记成 `<set>`，校验报错与异常信息也不进日志。）出口 IP 与归属地的查询结果同样不进日志。日志文件（`files/logs/`）与设置里的「导出日志」遵守同样的红线，且比 logcat 更严：`tailnet login URL:` 行与 mihomo 的 debug / info 行（逐条记连接目标）只进 logcat、不落盘。
+- 日志、check 复述、lessons 和提交里不得出现配置内容、secret、节点凭据或完整的登录 URL；唯一例外是 Go 层只打在设备 logcat 里的 `tailnet login URL:`，它是取登录链接的渠道。（Kotlin 侧的 `state` 日志把 `loginURL` 记成 `<set>`，校验报错与异常信息也不进日志。）代理组名、节点名属于配置内容，Petrel 自己打的日志行不带它们（`state` 的 `exit` 记成 `<set>`，切换节点只记关了几条连接）。出口 IP 与归属地的查询结果同样不进日志。日志文件（`files/logs/`）与设置里的「导出日志」遵守同样的红线，且比 logcat 更严：`tailnet login URL:` 行与 mihomo 的 debug / info 行（逐条记连接目标）只进 logcat、不落盘；mihomo 的拨号失败行（warn 级）落盘时整行重写，抹掉节点名、源和目标地址、规则载荷，只留协议、规则类型、目标的种类（IPv4 / IPv6 / 域名）和认得出的错误种类。原因：导出的日志会交到别人手里，连接目标等于浏览记录，节点命名等于配置内容。
 
 ### 参考实现
 

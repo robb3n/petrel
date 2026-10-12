@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/component/proxydialer"
+	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/tunnel"
 )
 
@@ -29,7 +30,7 @@ func ExitIP(node string) (string, error) {
 	if !running() {
 		return "", errors.New("not running")
 	}
-	p, ok := tunnel.Proxies()[node]
+	p, ok := lookupProxy(node)
 	if !ok {
 		return "", fmt.Errorf("node %q not found", node)
 	}
@@ -57,4 +58,20 @@ func ExitIP(node string) (string, error) {
 		return "", err
 	}
 	return string(body), nil
+}
+
+// lookupProxy 按名字找节点。proxy-providers 带来的成员不在 tunnel.Proxies() 里，只挂在各自的 provider 上；
+// 组里列出来的成员可能就是它们（Kotlin 按成员名、按主组一路选中到的叶子来查）。
+func lookupProxy(name string) (C.Proxy, bool) {
+	if p, ok := tunnel.Proxies()[name]; ok {
+		return p, true
+	}
+	for _, pd := range tunnel.Providers() {
+		for _, p := range pd.Proxies() {
+			if p.Name() == name {
+				return p, true
+			}
+		}
+	}
+	return nil, false
 }

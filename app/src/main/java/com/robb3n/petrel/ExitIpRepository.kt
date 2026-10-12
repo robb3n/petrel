@@ -17,9 +17,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.io.File
+import java.io.InputStream
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URL
 
 /** 一次出口 IP 查询的结果（ip-api 的字段，地名是中文）。 */
@@ -65,6 +68,35 @@ private fun ExitIpInfo.toJson(): JSONObject = JSONObject()
 data class CurrentExitIp(val info: ExitIpInfo?, val loading: Boolean, val failed: Boolean)
 
 /**
+ * 实际出口的那个成员：从第一个组的选中项出发，选中的成员本身又是一个可切换组时接着取那个组的选中项，直到不是组为止
+ * （`PROXY → REGION → A` 得到 A）。只看主组选中项的话，在 REGION 里换节点时主组这边什么都没变。
+ * 组互相选中（成环）时停在第一个重复处；子组里找不到选中项时停在那个子组上；没有组、或主组里找不到选中项时为 null。
+ * 不在 [groups] 里的组（url-test、fallback 这类不可手动切换的）当作叶子：它们的选中项 Go 侧没给。
+ */
+internal fun exitLeaf(groups: List<ProxyGroupUi>): ProxyUi? {
+    val first = groups.firstOrNull() ?: return null
+    val byName = groups.associateBy { it.name }
+    val seen = hashSetOf(first.name)
+    var member = first.proxies.firstOrNull { it.name == first.now } ?: return null
+    while (true) {
+        val sub = byName[member.name]?.takeIf { seen.add(it.name) } ?: return member
+        member = sub.proxies.firstOrNull { it.name == sub.now } ?: return member
+    }
+}
+
+/** 从 [input] 最多读 [max] 字节就停，后面还有多少都不管。 */
+internal fun readCapped(input: InputStream, max: Int): ByteArray {
+    val buf = ByteArray(max)
+    var n = 0
+    while (n < max) {
+        val r = input.read(buf, n, max - n)
+        if (r < 0) break
+        n += r
+    }
+    return buf.copyOf(n)
+}
+
+/**
  * 出口 IP：当前出口的实时查询，加上各节点记下的出口 IP（节点页显示）。
  * - 当前出口在连上、切换、刷新时重查（仅 tailnet 模式另在切网后重查：那时的出口就是手机自己的网络）。
  * - 每个节点第一次被用作出口时记下；「测延迟」测完后给还没记下的节点补查（直接经该节点查，不切换当前出口）。
@@ -75,7 +107,12 @@ object ExitIpRepository {
     private const val FILE = "exitip.json"
     private const val FILL_PARALLEL = 3
     private const val NET_DEBOUNCE_MILLIS = 3_000L
+
+    /** 直查的时限：连接、两次读之间、整次请求各不超过它（同 Go 侧的 `exitIPTimeout`）。 */
     private const val DIRECT_TIMEOUT_MILLIS = 8_000
+
+    /** 直查应答最多读这么多，同 `core/ptcore/exitip.go` 的 `exitIPMaxBytes`。 */
+    private const val DIRECT_MAX_BYTES = 4 * 1024
 
     /**
      * 当前出口查询失败后的重试间隔。VPN 刚起来、tailnet 刚到 Running 时经 `ts` 的通路还是冷的
@@ -107,9 +144,15 @@ object ExitIpRepository {
     private var token = 0
     private var netJob: Job? = null
 
+    /** 只管落盘：写文件不占本对象的锁，[networkChanged] 在主线程上要拿那把锁。 */
+    private val saveLock = Any()
+
     private fun key(p: ProxyUi): String? = p.ipKey
 
-    /** 查询的对象：[node] 为 null 表示不经代理、直接查（仅 tailnet 模式）。 */
+    /**
+     * 查询的对象：[node] 为 null 表示不经代理、直接查（仅 tailnet 模式）；否则是实际出口的叶子节点（[exitLeaf]），
+     * [key] 是它记下出口 IP 的键。叶子在身份里，子组里换了节点才会重查。
+     */
     private data class Target(val node: String?, val key: String?, val gen: Int)
 
     /** 幂等，由 Application 调用一次。 */
@@ -130,8 +173,7 @@ object ExitIpRepository {
     private fun target(s: CoreState, groups: List<ProxyGroupUi>, gen: Int): Target? {
         if (!s.exitReady) return null
         if (s.mode == ConnMode.Tailnet) return Target(null, null, gen)
-        val g = groups.firstOrNull() ?: return null
-        val p = g.proxies.firstOrNull { it.name == g.now } ?: return null
+        val p = exitLeaf(groups) ?: return null
         if (s.mode == ConnMode.Proxy && p.viaTailnet) return null
         return Target(p.name, key(p), gen)
     }
@@ -201,19 +243,26 @@ object ExitIpRepository {
     }
 
     /** 经节点 [node] 查（Go 侧直接经该节点拨号）；[node] 为 null 时本进程直接查（本 App 被排除在 VPN 外，走的就是手机网络）。 */
-    private fun query(node: String?): ExitIpInfo? = runCatching {
+    private suspend fun query(node: String?): ExitIpInfo? = runCatching {
         val body = if (node == null) directGet() else Ptcore.exitIP(node)
         parseExitIp(body)
     }.onFailure { PLog.w("exit ip query failed: ${it.javaClass.simpleName}") }.getOrNull()
 
-    private fun directGet(): String {
+    /**
+     * 明文直查，应答可能被劫持：最多读 [DIRECT_MAX_BYTES]，免得一直流的应答把 VPN 进程的堆撑爆。
+     * readTimeout 只限两次读之间的等待，细水长流的应答可以一直拖着，解析域名卡住时连接超时也管不到，所以整次请求另有一个总时限：
+     * 请求放在一个不随这里取消的协程里跑，这边最多等 [DIRECT_TIMEOUT_MILLIS]，到时断开连接、按失败算。
+     */
+    private suspend fun directGet(): String {
         val c = URL(Ptcore.ExitIPURL).openConnection() as HttpURLConnection
+        c.connectTimeout = DIRECT_TIMEOUT_MILLIS
+        c.readTimeout = DIRECT_TIMEOUT_MILLIS
+        val body = scope.async { c.inputStream.use { readCapped(it, DIRECT_MAX_BYTES) } }
         return try {
-            c.connectTimeout = DIRECT_TIMEOUT_MILLIS
-            c.readTimeout = DIRECT_TIMEOUT_MILLIS
-            c.inputStream.bufferedReader().use { it.readText() }
+            withTimeoutOrNull(DIRECT_TIMEOUT_MILLIS.toLong()) { body.await() }?.toString(Charsets.UTF_8)
+                ?: throw SocketTimeoutException()
         } finally {
-            c.disconnect()
+            c.disconnect() // 到时还没读完的：断开之后那边的读立刻出错返回
         }
     }
 
@@ -226,12 +275,14 @@ object ExitIpRepository {
     private fun prune(groups: List<ProxyGroupUi>) {
         if (groups.isEmpty()) return
         val live = groups.flatMap { it.proxies }.mapNotNull(::key).toSet()
-        val before = _cache.value
-        val after = before.filterKeys { it in live }
-        if (after.size != before.size) {
-            _cache.value = after
-            save()
+        // update 是 CAS：读、过滤、整表写回之间另一个协程 remember() 记下的条目不会被盖掉
+        var removed = false
+        _cache.update { before ->
+            val after = before.filterKeys { it in live }
+            removed = after.size != before.size
+            if (removed) after else before
         }
+        if (removed) save()
     }
 
     private fun load() {
@@ -243,15 +294,17 @@ object ExitIpRepository {
         }.onFailure { PLog.w("exit ip cache unreadable: ${it.javaClass.simpleName}") }
     }
 
-    @Synchronized
     private fun save() {
         val f = file ?: return
-        val o = JSONObject()
-        _cache.value.forEach { (k, v) -> o.put(k, v.toJson()) }
-        runCatching {
-            val tmp = File(f.parentFile, "$FILE.tmp")
-            tmp.writeText(o.toString())
-            if (!tmp.renameTo(f)) error("rename failed")
-        }.onFailure { PLog.w("exit ip cache not saved: ${it.javaClass.simpleName}") }
+        synchronized(saveLock) {
+            // 内容在锁里取：两次 save 挨着时，后写的那次写下的一定是更新的那份
+            val o = JSONObject()
+            _cache.value.forEach { (k, v) -> o.put(k, v.toJson()) }
+            runCatching {
+                val tmp = File(f.parentFile, "$FILE.tmp")
+                tmp.writeText(o.toString())
+                if (!tmp.renameTo(f)) error("rename failed")
+            }.onFailure { PLog.w("exit ip cache not saved: ${it.javaClass.simpleName}") }
+        }
     }
 }

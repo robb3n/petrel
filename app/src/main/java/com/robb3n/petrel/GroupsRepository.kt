@@ -68,8 +68,9 @@ object GroupsRepository {
     }
 
     private fun reload() {
+        // 解析失败的异常信息会引用原文（组名、节点名都是配置内容）：只记类名
         val parsed = runCatching { parse(Ptcore.groups()) }
-            .onFailure { PLog.w("groups failed", it) }
+            .onFailure { PLog.w("groups failed: ${it.javaClass.simpleName}") }
             .getOrNull() ?: return
         _groups.value = parsed
     }

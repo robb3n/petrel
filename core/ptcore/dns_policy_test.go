@@ -280,3 +280,205 @@ func TestNodeSwitchClearsDNSCacheSynchronously(t *testing.T) {
 		t.Fatal("DNS cache still stale after selection returns")
 	}
 }
+
+// "RULES" is the DNS dialer's keyword for "follow the routing rules". An outbound
+// with that name must never become the protected DNS proxy, however it is chosen.
+func TestManagedDNSRejectsReservedRulesName(t *testing.T) {
+	named := strings.ReplaceAll(validMinimal, "PROXY", "RULES")
+	// Inferred from the only group / the MATCH target.
+	if got := ValidateConfig(t.TempDir(), []byte(named)); !strings.Contains(got, "无法确定 DNS 的主代理") {
+		t.Fatalf("inferred RULES accepted: %q", got)
+	}
+	// Explicitly requested.
+	if got := ValidateConfig(t.TempDir(), []byte(named+"\npetrel-dns: {proxy: RULES}\n")); !strings.Contains(got, "petrel-dns.proxy") {
+		t.Fatalf("explicit RULES accepted: %q", got)
+	}
+	// Next to a usable group it is passed over rather than picked.
+	both := `proxy-groups:
+  - {name: RULES, type: select, proxies: [DIRECT]}
+  - {name: Main, type: select, proxies: [DIRECT]}
+rules:
+  - MATCH,RULES
+`
+	if got := ValidateConfig(t.TempDir(), []byte(both)); !strings.Contains(got, "无法确定 DNS 的主代理") {
+		t.Fatalf("MATCH,RULES accepted: %q", got)
+	}
+	cfg, _ := inject(t, both+"petrel-dns: {proxy: Main}\n")
+	if got := cfg["dns"].(map[string]any)["nameserver"].([]any)[0]; got != "https://1.1.1.1/dns-query#Main" {
+		t.Fatal(got)
+	}
+}
+
+// Mihomo upper-cases rule types, so lower-case rules route traffic and must
+// steer DNS, the insertion point and main-proxy inference alike.
+func TestManagedDNSLowerCaseRuleTypes(t *testing.T) {
+	src := `proxy-groups:
+  - {name: Main, type: select, proxies: [DIRECT]}
+  - {name: Other, type: select, proxies: [DIRECT]}
+rules:
+  - domain-suffix,baidu.com,Main
+  - Domain,direct.example,DIRECT
+  - match,Main
+`
+	cfg, _ := inject(t, src)
+	dns := cfg["dns"].(map[string]any)
+	proxied := []any{"https://1.1.1.1/dns-query#Main", "https://8.8.8.8/dns-query#Main"}
+	if !reflect.DeepEqual(dns["nameserver"], proxied) {
+		t.Fatalf("main proxy not inferred from a lower-case match: %v", dns["nameserver"])
+	}
+	policy := dns["nameserver-policy"].(map[string]any)
+	if !reflect.DeepEqual(policy["+.baidu.com"], proxied) {
+		t.Fatalf("lower-case proxy rule missing from DNS policy: %v", policy["+.baidu.com"])
+	}
+	if !reflect.DeepEqual(policy["direct.example"], []any{directDoH}) {
+		t.Fatalf("mixed-case direct rule missing from DNS policy: %v", policy["direct.example"])
+	}
+	rules := cfg["rules"].([]any)
+	if rules[len(rules)-1] != "match,Main" || rules[len(rules)-2] != "RULE-SET,"+cnProvider+",DIRECT" {
+		t.Fatalf("domestic rule not ahead of the lower-case catch-all: %v", rules)
+	}
+	withGeo, _ := inject(t, strings.Replace(src, "  - match,Main", "  - geoip,cn,DIRECT\n  - match,Main", 1))
+	rules = withGeo["rules"].([]any)
+	if rules[len(rules)-2] != "geoip,cn,DIRECT" || rules[len(rules)-3] != "RULE-SET,"+cnProvider+",DIRECT" {
+		t.Fatalf("domestic rule not ahead of lower-case geoip: %v", rules)
+	}
+
+	// The real matchers agree: the explicit rule wins over the domestic set.
+	out, _, _, err := injectConfig([]byte(src), 42, placeholderSocks, "test", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := parseConfig(t.TempDir(), out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, provider := range parsed.RuleProviders {
+		if err := provider.Initial(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// (A RULE-SET rule resolves its provider through the running tunnel, so the
+	// domestic set itself is not matched here; its position is asserted above.)
+	for host, want := range map[string]string{"www.baidu.com": "Main", "direct.example": "DIRECT", "www.google.com": "Main"} {
+		got := ""
+		for _, rule := range parsed.Rules {
+			if ok, target := rule.Match(&C.Metadata{Host: host}, C.RuleMatchHelper{}); ok {
+				got = target
+				break
+			}
+		}
+		if got != want {
+			t.Errorf("route %s: got %s want %s", host, got, want)
+		}
+	}
+	for _, p := range parsed.DNS.NameServerPolicy {
+		if p.Domain == "+.baidu.com" {
+			for _, ns := range p.NameServers {
+				if ns.ProxyName != "Main" {
+					t.Errorf("baidu.com DNS leaked to %s", ns.ProxyName)
+				}
+			}
+		}
+	}
+}
+
+// A routing rule takes payloads a nameserver-policy key cannot: those rules
+// keep routing, and the configuration still loads.
+func TestManagedDNSSkipsPayloadsInvalidAsPolicyKeys(t *testing.T) {
+	bad := []string{
+		"DOMAIN-SUFFIX,.dotted.example,PROXY",
+		"DOMAIN-SUFFIX,trailing.example.,DIRECT",
+		"DOMAIN,trailing-exact.example.,PROXY",
+		"DOMAIN,rule-set:nowhere,PROXY",
+		"DOMAIN,GeoSite:cn,DIRECT",
+	}
+	src := strings.Replace(validMinimal, "  - MATCH,PROXY",
+		"  - "+strings.Join(bad, "\n  - ")+"\n  - DOMAIN,kept.example,PROXY\n  - MATCH,PROXY", 1)
+	if got := ValidateConfig(t.TempDir(), []byte(src)); got != "" {
+		t.Fatalf("configuration that loaded before managed DNS is rejected: %s", got)
+	}
+	cfg, _ := inject(t, src)
+	policy := cfg["dns"].(map[string]any)["nameserver-policy"].(map[string]any)
+	if len(policy) != 2+len(domesticAppHosts) || policy["kept.example"] == nil || policy["rule-set:"+cnProvider] == nil {
+		t.Fatalf("unexpected policy keys: %v", policy)
+	}
+	rules := cfg["rules"].([]any)
+	for i, want := range bad {
+		if rules[i] != want {
+			t.Fatalf("routing rule %d changed: %v", i, rules[i])
+		}
+	}
+}
+
+func TestManagedDNSPrunesSupersededSnapshots(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, "rules")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	stale := []string{cnProvider + "-00000000.mrs", cnProvider + "-ffffffff.mrs"}
+	keep := []string{"user-rules.mrs", cnProvider + ".yaml", cnProvider + "-notes.txt"}
+	for _, n := range append(append([]string{}, stale...), keep...) {
+		if err := os.WriteFile(filepath.Join(dir, n), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A leftover that cannot be removed (a non-empty directory) must not fail the start.
+	stuck := filepath.Join(dir, cnProvider+"-stuck.mrs")
+	if err := os.MkdirAll(filepath.Join(stuck, "x"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureDNSRules(home); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(filepath.Join(home, cnRulePath)); err != nil || !bytes.Equal(b, cnRules) {
+		t.Fatal("current snapshot missing")
+	}
+	for _, n := range stale {
+		if _, err := os.Stat(filepath.Join(dir, n)); !os.IsNotExist(err) {
+			t.Errorf("superseded snapshot kept: %s", n)
+		}
+	}
+	for _, n := range keep {
+		if _, err := os.Stat(filepath.Join(dir, n)); err != nil {
+			t.Errorf("unrelated file removed: %s", n)
+		}
+	}
+	// Also when the current snapshot was already installed.
+	late := filepath.Join(dir, stale[0])
+	if err := os.WriteFile(late, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureDNSRules(home); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(late); !os.IsNotExist(err) {
+		t.Error("superseded snapshot kept on the already-installed path")
+	}
+}
+
+// Managed rules need rule mode; an explicit global/direct is refused instead of
+// being silently rewritten.
+func TestManagedDNSRejectsGlobalAndDirectMode(t *testing.T) {
+	for _, mode := range []string{"global", "GLOBAL", "direct", "Direct"} {
+		got := ValidateConfig(t.TempDir(), []byte("mode: "+mode+"\n"+validMinimal))
+		if !strings.Contains(got, "mode: "+mode) || !strings.Contains(got, "petrel-dns.mode: original") {
+			t.Errorf("mode %s: %q", mode, got)
+		}
+		// The escape hatch keeps the user's mode untouched.
+		cfg, _ := inject(t, "mode: "+mode+"\n"+validMinimal+"petrel-dns: {mode: original}\n")
+		if cfg["mode"] != mode {
+			t.Errorf("original mode rewrote mode %s to %v", mode, cfg["mode"])
+		}
+	}
+	for _, prefix := range []string{"", "mode: rule\n", "mode: Rule\n"} {
+		cfg, _ := inject(t, prefix+validMinimal)
+		if cfg["mode"] != "rule" {
+			t.Errorf("%q: mode = %v", prefix, cfg["mode"])
+		}
+	}
+	// Nothing to manage (no Internet proxy): the mode is left alone.
+	if cfg, _ := inject(t, "mode: global\n"); cfg["mode"] != "global" || cfg["dns"] != nil {
+		t.Errorf("empty configuration was managed: %v", cfg)
+	}
+}

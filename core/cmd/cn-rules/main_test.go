@@ -212,3 +212,117 @@ func TestSecondRenameFailureRestoresOldMRS(t *testing.T) {
 		t.Fatal("first file not restored", err)
 	}
 }
+
+// The same candidate is applied again after a rollback, and after an apply that
+// stopped between writing the rollback record and replacing the assets.
+func TestApplyAgainReusesItsRollbackRecord(t *testing.T) {
+	assets, dir, before := fixture(t)
+	if err := prepareWithFetch(assets, dir, "meta", downloadFixture(t)); err != nil {
+		t.Fatal(err)
+	}
+	next, _, _ := verifyCandidate(dir)
+	hash, backup := R.Hash(next.mrs), filepath.Join(dir, "previous")
+	if err := apply(assets, dir, hash); err != nil {
+		t.Fatal(err)
+	}
+	record, err := os.ReadFile(filepath.Join(backup, "transaction.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = rollback(assets, backup, R.Hash(before.mrs)); err != nil {
+		t.Fatal(err)
+	}
+	if err = apply(assets, dir, hash); err != nil {
+		t.Fatalf("second apply after rollback: %v", err)
+	}
+	if got, _ := readBundle(assets); got.fingerprint() != next.fingerprint() {
+		t.Fatal("second apply did not install the candidate")
+	}
+	if got, _ := os.ReadFile(filepath.Join(backup, "transaction.json")); !bytes.Equal(got, record) {
+		t.Fatal("rollback record rewritten")
+	}
+	if saved, _ := readBundle(backup); saved.fingerprint() != before.fingerprint() {
+		t.Fatal("rollback bundle changed")
+	}
+	if err = rollback(assets, backup, R.Hash(before.mrs)); err != nil {
+		t.Fatalf("rollback after the second apply: %v", err)
+	}
+
+	// Record written, assets untouched: the retry completes the same transaction.
+	assets, dir, before = fixture(t)
+	if err = prepareWithFetch(assets, dir, "meta", downloadFixture(t)); err != nil {
+		t.Fatal(err)
+	}
+	next, _, _ = verifyCandidate(dir)
+	guard := rollbackGuard{before.fingerprint(), next.fingerprint(), R.Hash(next.mrs), R.Hash(next.manifest)}
+	if err = saveRollback(filepath.Join(dir, "previous"), before, guard); err != nil {
+		t.Fatal(err)
+	}
+	if err = apply(assets, dir, R.Hash(next.mrs)); err != nil {
+		t.Fatalf("retry after an interrupted apply: %v", err)
+	}
+}
+
+// previous/ left by anything else is someone's only way back: refuse, name the
+// transaction, and touch neither the record nor the assets.
+func TestApplyRefusesForeignRollbackRecord(t *testing.T) {
+	for name, spoil := range map[string]func(t *testing.T, backup string, guard rollbackGuard){
+		"other transaction": func(t *testing.T, backup string, guard rollbackGuard) {
+			guard.After = strings.Repeat("ab", 32)
+			if err := write(backup, "transaction.json", jsonBytes(guard)); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"no record": func(t *testing.T, backup string, _ rollbackGuard) {
+			if err := os.Remove(filepath.Join(backup, "transaction.json")); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"unreadable record": func(t *testing.T, backup string, _ rollbackGuard) {
+			if err := write(backup, "transaction.json", []byte("{")); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"bundle changed": func(t *testing.T, backup string, _ rollbackGuard) {
+			if err := write(backup, R.MRSFile, []byte("tampered")); err != nil {
+				t.Fatal(err)
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			assets, dir, before := fixture(t)
+			if err := prepareWithFetch(assets, dir, "meta", downloadFixture(t)); err != nil {
+				t.Fatal(err)
+			}
+			next, _, _ := verifyCandidate(dir)
+			backup := filepath.Join(dir, "previous")
+			guard := rollbackGuard{before.fingerprint(), next.fingerprint(), R.Hash(next.mrs), R.Hash(next.manifest)}
+			if err := saveRollback(backup, before, guard); err != nil {
+				t.Fatal(err)
+			}
+			spoil(t, backup, guard)
+			snapshot := func() string {
+				var all []byte
+				for _, n := range []string{R.MRSFile, R.ManifestFile, "transaction.json"} {
+					b, _ := os.ReadFile(filepath.Join(backup, n))
+					all = append(append(all, b...), 0)
+				}
+				return R.Hash(all)
+			}
+			kept := snapshot()
+			err := apply(assets, dir, R.Hash(next.mrs))
+			if err == nil {
+				t.Fatal("overwrote an existing rollback record")
+			}
+			if name == "other transaction" && !strings.Contains(err.Error(), "abababababab") {
+				t.Errorf("error does not name the transaction found: %v", err)
+			}
+			if snapshot() != kept {
+				t.Error("rollback record modified")
+			}
+			if got, _ := readBundle(assets); got.fingerprint() != before.fingerprint() {
+				t.Error("assets replaced despite the refusal")
+			}
+		})
+	}
+}

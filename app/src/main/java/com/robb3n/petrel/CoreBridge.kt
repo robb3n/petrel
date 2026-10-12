@@ -13,9 +13,13 @@ private val LOGIN_URL_VALUE = Regex("\"loginURL\":\"[^\"]+\"")
 /** 错误文本可能是 mihomo 的配置解析错误，带着配置行与凭据：日志里只记「有错误」。JSON 字符串里的转义引号也要跨过去。 */
 private val ERROR_VALUE = Regex("\"error\":\"(?:[^\"\\\\]|\\\\.)+\"")
 
-/** 状态 JSON 的日志形态：登录链接与错误文本都换成 `<set>`。 */
+/** 当前节点名是配置内容（组名、节点名都不进日志）：只记「有」。名字里的转义引号同样要跨过去。 */
+private val EXIT_VALUE = Regex("\"exit\":\"(?:[^\"\\\\]|\\\\.)+\"")
+
+/** 状态 JSON 的日志形态：登录链接、错误文本与当前节点名都换成 `<set>`，本来为空的保持为空。 */
 internal fun redactStateJson(json: String): String =
     json.replace(LOGIN_URL_VALUE, "\"loginURL\":\"<set>\"").replace(ERROR_VALUE, "\"error\":\"<set>\"")
+        .replace(EXIT_VALUE, "\"exit\":\"<set>\"")
 
 /** Go 内核推来的状态，形状见 core/ptcore/core.go 的 state。 */
 data class CoreState(
@@ -70,7 +74,7 @@ object CoreBridge : Host {
     val state: StateFlow<CoreState> = _state
 
     override fun onState(json: String) {
-        PLog.i("state ${redactStateJson(json)}") // 登录链接与错误文本不进日志
+        PLog.i("state ${redactStateJson(json)}") // 登录链接、错误文本与节点名不进日志
         set(CoreState.parse(json))
     }
 

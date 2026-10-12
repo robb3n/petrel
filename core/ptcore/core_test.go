@@ -185,12 +185,32 @@ func TestTailnetOnlyConfigParses(t *testing.T) {
 	if msg := ValidateConfig(t.TempDir(), tailnetOnlyConfig); msg != "" {
 		t.Fatalf("tailnet-only config rejected: %s", msg)
 	}
-	out, _, _, err := injectConfig(tailnetOnlyConfig, 0, "127.0.0.1:1080", "p", "s")
+	out, _, _, err := injectConfigFor(tailnetOnlyConfig, 0, "127.0.0.1:1080", "p", "s", false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(out), "MATCH,ts") || !strings.Contains(string(out), "name: ts") {
 		t.Fatalf("injected config lacks the ts rule or node:\n%s", out)
+	}
+	// 这份配置没有 dns 段：再劫持 53 端口，发往 tailnet 上 DNS 服务器的查询就到不了 ts。
+	// 以 mihomo 解析出来的为准：它的 tun 缺省劫持 0.0.0.0:53，光是不写这个键不算数
+	if strings.Contains(string(out), "\ndns:") {
+		t.Fatalf("tailnet-only config grew a dns section:\n%s", out)
+	}
+	cfg, err := parseConfig(t.TempDir(), out)
+	if err != nil {
+		t.Fatalf("tailnet-only config rejected: %v", err)
+	}
+	if len(cfg.General.Tun.DNSHijack) != 0 {
+		t.Fatalf("tailnet-only tun still hijacks DNS: %v", cfg.General.Tun.DNSHijack)
+	}
+	// 其余模式照旧劫持
+	full, _, _, err := injectConfig([]byte(validMinimal), 0, "127.0.0.1:1080", "p", "s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg, err = parseConfig(t.TempDir(), full); err != nil || len(cfg.General.Tun.DNSHijack) != 1 {
+		t.Fatalf("full modes must keep hijacking DNS: %v %v", cfg, err)
 	}
 }
 

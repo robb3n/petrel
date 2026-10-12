@@ -390,7 +390,7 @@ proxies: []
 	for _, w := range warnings {
 		if strings.Contains(w, "listener") || strings.Contains(w, "tunnel") {
 			n++
-			if strings.Contains(w, "mixed-in") {
+			if strings.Contains(w, "mixed-in") || strings.Contains(w, "6553") || strings.Contains(w, "7777") {
 				t.Errorf("warning leaks config content: %q", w)
 			}
 		}

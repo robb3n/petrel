@@ -34,6 +34,14 @@ enum class ConnMode(val key: String, val title: String) {
 }
 
 /**
+ * 设置里拨了「代理」开关之后要不要重启 VPN；[pref] 是拨完之后的模式。VPN 在跑、且内核跑的不是这个模式才需要，另有一个例外：
+ * 没有配置时拨开代理不重启。这时重启会因为没有配置而启动失败，把正在用的仅 tailnet 连接一起断掉；偏好先存着，
+ * 导入配置触发的重启再切过去（[restartAfterImport]）。之后又拨回去时，内核本来就在跑仅 tailnet，同样不用动它。
+ */
+internal fun restartAfterProxyToggle(state: CoreState, pref: ConnMode, configPresent: Boolean): Boolean =
+    state.active && state.mode != pref && !(pref.proxyOn && !configPresent)
+
+/**
  * 连接偏好，SharedPreferences 文件 `conn`：`tailnet`、`proxy` 两个开关，默认都开。
  * 服务每次启动时读 [mode]；VPN 开着时改了开关，由调用方让服务重启生效（[PetrelVpnService.restart]）。
  */

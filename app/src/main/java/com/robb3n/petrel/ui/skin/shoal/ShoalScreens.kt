@@ -53,7 +53,14 @@ import com.robb3n.petrel.ui.model.ExitIpUi
 import com.robb3n.petrel.ui.model.IpKind
 import com.robb3n.petrel.ui.model.NodeIp
 import com.robb3n.petrel.ui.model.StatSlot
-import com.robb3n.petrel.ui.model.settingsDesc
+import com.robb3n.petrel.ui.model.EXIT_IP_FAILED
+import com.robb3n.petrel.ui.model.EXIT_IP_LOADING
+import com.robb3n.petrel.ui.model.PROXY_DISABLED_END
+import com.robb3n.petrel.ui.model.PROXY_DISABLED_SUB
+import com.robb3n.petrel.ui.model.exitIpLoadingSub
+import com.robb3n.petrel.ui.model.failedLine
+import com.robb3n.petrel.ui.model.placeFull
+import com.robb3n.petrel.ui.model.placeShort
 import com.robb3n.petrel.ui.model.tagLabel
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.layout.height
@@ -325,19 +332,16 @@ private fun HeroIpLine(ip: ExitIpUi, direct: Boolean, a: PetrelActions) {
             is ExitIpUi.Ready -> {
                 CountryChip(ip.ip.cc, c.heroInk, c.heroOnInk, big = true)
                 CssText(ip.ip.ip, ui(17f, FontWeight.Medium, 17f, letterSpacing = 0.02.em).copy(fontFamily = Oswald).tabular(), c.heroInk, softWrap = false)
-                CssText(
-                    if (direct) "直连 · ${ip.ip.short}" else ip.ip.short,
-                    ui(12f), c.heroInk.copy(alpha = 0.85f), Modifier.weight(1f), softWrap = false,
-                )
+                CssText(ip.placeShort(direct), ui(12f), c.heroInk.copy(alpha = 0.85f), Modifier.weight(1f), softWrap = false)
                 ShoalIconButton(Ms.contentCopy, "复制出口 IP", { a.copyExitIp(ip.ip.ip) }, size = 30.dp, iconSize = 17.dp, tint = c.heroInk)
             }
             ExitIpUi.Loading -> {
                 CountryChip("··", c.heroInk, c.heroOnInk, big = true)
-                CssText("查询出口 IP…", ui(12.5f, FontWeight.Medium), c.heroInk.copy(alpha = 0.85f), Modifier.weight(1f), softWrap = false)
+                CssText(EXIT_IP_LOADING, ui(12.5f, FontWeight.Medium), c.heroInk.copy(alpha = 0.85f), Modifier.weight(1f), softWrap = false)
             }
             is ExitIpUi.Unavailable -> {
                 CountryChip("—", c.heroInk, c.heroOnInk, big = true)
-                CssText("查不到出口 IP · ${ip.hint}", ui(12.5f, FontWeight.Medium), c.heroInk.copy(alpha = 0.85f), Modifier.weight(1f), softWrap = false)
+                CssText(ip.failedLine, ui(12.5f, FontWeight.Medium), c.heroInk.copy(alpha = 0.85f), Modifier.weight(1f), softWrap = false)
             }
         }
     }
@@ -354,17 +358,14 @@ private fun ExitIpIsle(ip: ExitIpUi, direct: Boolean, a: PetrelActions) {
                 when (ip) {
                     is ExitIpUi.Ready -> {
                         CssText(ip.ip.ip, ui(22f, FontWeight.Medium, 24.2f, letterSpacing = 0.02.em).copy(fontFamily = Oswald).tabular(), c.tx, softWrap = false)
-                        CssLines(
-                            if (direct) "直连 · ${ip.ip.location}" else ip.ip.location,
-                            ui(12f, lineHeight = 16.8f), c.tx2, Modifier.padding(top = 2.dp), maxLines = 2,
-                        )
+                        CssLines(ip.placeFull(direct), ui(12f, lineHeight = 16.8f), c.tx2, Modifier.padding(top = 2.dp), maxLines = 2)
                     }
                     ExitIpUi.Loading -> {
-                        CssText("查询出口 IP…", ui(15f, FontWeight.Medium), c.tx2)
-                        CssText(if (direct) "经手机网络查询" else "经当前出口查询", ui(12f), c.tx2, Modifier.padding(top = 2.dp))
+                        CssText(EXIT_IP_LOADING, ui(15f, FontWeight.Medium), c.tx2)
+                        CssText(exitIpLoadingSub(direct), ui(12f), c.tx2, Modifier.padding(top = 2.dp))
                     }
                     is ExitIpUi.Unavailable -> {
-                        CssText("查不到出口 IP", ui(15f, FontWeight.Medium), c.tx2)
+                        CssText(EXIT_IP_FAILED, ui(15f, FontWeight.Medium), c.tx2)
                         CssLines(ip.hint, ui(12f, lineHeight = 16.8f), c.tx2, Modifier.padding(top = 2.dp), maxLines = 2)
                     }
                 }
@@ -492,8 +493,8 @@ private fun HopRow(hop: Hop, last: Boolean, group: String, delay: DelayView, onC
             CssText(hop.caption(group), ui(11.5f), if (hop.blocked) c.pinkInk else c.tx2, Modifier.padding(top = 1.dp))
             when (ip) {
                 is ExitIpUi.Ready -> IpLine(ip.ip.cc, ip.ip.line, onButter = true)
-                ExitIpUi.Loading -> IpLine("··", "查询出口 IP…", onButter = true)
-                is ExitIpUi.Unavailable -> IpLine("—", "查不到出口 IP", onButter = true)
+                ExitIpUi.Loading -> IpLine("··", EXIT_IP_LOADING, onButter = true)
+                is ExitIpUi.Unavailable -> IpLine("—", EXIT_IP_FAILED, onButter = true)
                 null -> Unit
             }
         }
@@ -527,14 +528,14 @@ private fun LinksIsle(ui: HomeUi, a: PetrelActions) {
             }
             if (ui.proxyDisabled) {
                 ListRow(
-                    "代理", sub = "仅 tailnet 模式下未启用", titleColor = c.tx2,
+                    "代理", sub = PROXY_DISABLED_SUB, titleColor = c.tx2,
                     leading = { Tile(Ms.altRoute, TileTone.Idle) },
                     onClick = a.openSettings, role = Role.Button, onClickLabel = "打开设置",
-                    trailing = { RowEnd("未启用") },
+                    trailing = { RowEnd(PROXY_DISABLED_END) },
                 )
             }
             ListRow(
-                "配置", sub = if (ui.config.present) "${ui.config.name} · ${ui.config.stampShort}" else "还没有配置",
+                "配置", sub = ui.config.homeLine,
                 leading = { Tile(Ms.description, TileTone.Butter) },
                 onClick = a.openConfig, role = Role.Button,
                 trailing = { RowEnd(icon = Ms.chevronRight) },
@@ -898,7 +899,7 @@ internal fun ShoalSettings(ui: SettingsUi, a: PetrelActions) {
                     ModeSwitchRow("代理", "mihomo 按配置分流", Ms.altRoute, TileTone.Ol, ui.mode.proxyOn, !ui.mode.tailnetOn, a.setProxyOn)
                 }
             }
-            SettingsNote(ui.mode.settingsDesc)
+            SettingsNote(ui.modeNote)
             Row(
                 Modifier.padding(start = 6.dp, end = 6.dp, top = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(5.dp),

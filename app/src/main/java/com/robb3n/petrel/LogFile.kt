@@ -2,12 +2,13 @@ package com.robb3n.petrel
 
 import java.io.File
 import java.io.FileOutputStream
+import java.io.OutputStream
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /*
- * 日志文件的纯逻辑：落盘规则、行格式、轮转、进程死因的名字。不碰 Android 类，JVM 单测覆盖（LogFileTest）。
+ * 日志文件的纯逻辑：落盘规则与落盘前的改写、行格式、轮转、进程死因的名字。不碰 Android 类，JVM 单测覆盖（LogFileTest）。
  * 写线程、队列与 logcat 在 PLog.kt。
  */
 
@@ -28,6 +29,68 @@ internal fun shouldPersist(level: Char, msg: String): Boolean = when {
     msg.startsWith(LOGIN_URL_LINE) -> false
     msg.startsWith(MIHOMO_PREFIX) && (level == 'D' || level == 'I') -> false
     else -> true
+}
+
+private val DIAL_FAILURE = Regex("""^mihomo: \[(TCP|UDP)] dial """)
+private val MATCH_TYPE = Regex(""" \(match ([A-Za-z0-9]+)/""")
+
+/** mihomo 的规则类型名（`constant/rule.go` 的 `RuleType.String()`）。括号那一段只认这些：节点名里也可能写着 `(match xxx/`。 */
+private val RULE_TYPES = setOf(
+    "Domain", "DomainSuffix", "DomainKeyword", "DomainRegex", "DomainWildcard", "GeoSite", "GeoIP", "SrcGeoIP",
+    "IPASN", "SrcIPASN", "IPCIDR", "SrcIPCIDR", "IPSuffix", "SrcIPSuffix", "SrcPort", "DstPort", "InPort",
+    "InUser", "InName", "InType", "ProcessName", "ProcessPath", "ProcessNameRegex", "ProcessPathRegex",
+    "ProcessNameWildcard", "ProcessPathWildcard", "RematchName", "Match", "RuleSet", "Network", "DSCP", "Uid",
+    "SubRules", "AND", "OR", "NOT",
+)
+private val IPV4_PORT = Regex("""\d{1,3}(\.\d{1,3}){3}:\d+""")
+
+/**
+ * 写进文件之前对一行的改写（logcat 照打全文）。目前只改 mihomo 的拨号失败行（warn 级，所以会落盘）：
+ * `mihomo: [TCP] dial <节点> (match <规则类型>/<载荷>) <源> --> <目标:端口> error: <原因>`，没命中规则时没有括号那一段。
+ * 目标地址等于浏览记录，节点名与规则载荷是配置内容，错误原因里也常带地址、偶尔带节点名。这些都是自由文本，
+ * 没法逐个抠掉，所以整行按能确认安全的几样重写：协议、规则类型、目标的种类（IPv4 / IPv6 / 域名）、错误的种类（[dialErrorKind]）。
+ * 写出去的每一段都是这里的字面量或表里的名字（[RULE_TYPES]、[ERROR_KINDS]），原文的片段不会带出来。其余行原样返回。
+ */
+internal fun redactForFile(msg: String): String {
+    if (!msg.startsWith(MIHOMO_PREFIX)) return msg // 每条日志都经过这里：不是 mihomo 的行不进正则
+    val head = DIAL_FAILURE.find(msg) ?: return msg
+    val net = head.groupValues[1]
+    val arrow = msg.lastIndexOf(" --> ")
+    val error = if (arrow < 0) -1 else msg.indexOf(" error: ", arrow)
+    if (error < 0) return "mihomo: [$net] dial <redacted>"
+    val rule = MATCH_TYPE.findAll(msg.substring(head.range.last, arrow)).map { it.groupValues[1] }.firstOrNull { it in RULE_TYPES }
+        ?.let { " (match $it)" }.orEmpty()
+    val target = msg.substring(arrow + " --> ".length, error)
+    val kind = when {
+        target.startsWith("[") -> "<ipv6>"
+        IPV4_PORT.matches(target) -> "<ipv4>"
+        else -> "<host>"
+    }
+    return "mihomo: [$net] dial <node>$rule --> $kind error: ${dialErrorKind(msg.substring(error + " error: ".length))}"
+}
+
+/** 错误原因里认得出、且本身不带地址、域名、节点名的说法。互相包含的（`unexpected EOF` 与 `EOF`）只留长的。 */
+private val ERROR_KINDS = listOf(
+    "dns resolve failed", "ip version error", "couldn't find ip", "all DNS requests failed", "no such host",
+    "connect error", "connection refused", "connection reset by peer", "connection timed out", "broken pipe",
+    "network is unreachable", "no route to host", "host is unreachable",
+    "i/o timeout", "context deadline exceeded", "context canceled",
+    "handshake failure", "handshake timeout", "certificate", "unexpected EOF", "EOF",
+    "UDP is not supported", "not found", "permission denied", "operation not permitted",
+    "too many open files", "use of closed network connection",
+)
+
+/**
+ * 拨号错误的种类：把 [reason] 里认得出的说法（[ERROR_KINDS]）按出现的先后用 `: ` 连起来，
+ * 例如 `<服务器:端口> connect error: dial tcp <ip:端口>: i/o timeout` 得到 `connect error: i/o timeout`；一个都认不出时是 `other`。
+ * 只输出表里的字面量，原文的任何片段都不会带出来。
+ */
+internal fun dialErrorKind(reason: String): String {
+    val hits = ERROR_KINDS.mapNotNull { k -> reason.indexOf(k).takeIf { it >= 0 }?.let { it to k } }.sortedBy { it.first }
+    return hits
+        .filter { (i, k) -> hits.none { (j, o) -> o != k && j <= i && i + k.length <= j + o.length } }
+        .joinToString(": ") { it.second }
+        .ifEmpty { "other" }
 }
 
 private val LINE_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
@@ -149,9 +212,19 @@ internal class RotatingLogFile(private val dir: File, private val maxBytes: Long
 
     private fun rotate() {
         close()
+        val current = File(dir, LOG_FILE)
         val backup = File(dir, LOG_BACKUP)
         backup.delete()
-        File(dir, LOG_FILE).renameTo(backup)
+        // 改名失败（备份那个位置删不掉、被占着）时备份已经没了，当前文件却还是超限的：留着它的话，之后每写一行都重走一遍轮转，
+        // 上限就失效了。这一段保不住，丢掉它从空文件重新开始；删不掉就截断，截断也不行则抛给调用方
+        if (!current.renameTo(backup) && !current.delete()) FileOutputStream(current).close()
         size = 0
     }
 }
+
+/**
+ * 把 [dir] 里的备份与当前日志依次拷进 [out]（先旧后新），返回拷了多少字节。
+ * 调用方要持着写线程的锁（[PLog.withFiles]）：两个文件分开打开的话，中间撞上轮转，刚轮转出去的那一整段就漏了。
+ */
+internal fun copyLogFiles(dir: File, out: OutputStream): Long =
+    listOf(File(dir, LOG_BACKUP), File(dir, LOG_FILE)).filter { it.isFile }.sumOf { f -> f.inputStream().use { it.copyTo(out) } }

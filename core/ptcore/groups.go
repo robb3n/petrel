@@ -94,22 +94,33 @@ func orderGroups(cands []groupCandidate, globalOrder []string) []string {
 
 // chainOf 从成员出发，沿 dialer-proxy 逐级找上一跳，返回「第一跳 → … → 成员自己」。
 // dialerOf(name) 返回 name 的 dialer-proxy（没有则空串）；第二个返回值表示 name 是否是已知节点。
+// dialer-proxy 指向代理组时穿过去：组的前面接它当前选中的成员（selectedOf，没有唯一选中项时为空串），
+// 再从那个成员继续往前找。否则前置组选中 ts 时链里看不到 ts，仅代理模式下认不出这个节点用不了。
+// 成员自己是组时不往里走：它在界面上就是一个可选项。
 // 遇到环或引用了不存在的名字就截断，总长度上限 maxChainDepth。
-func chainOf(name string, dialerOf func(string) (string, bool)) []string {
+func chainOf(name string, dialerOf func(string) (string, bool), selectedOf func(string) string) []string {
 	rev := []string{name}
 	seen := map[string]bool{name: true}
 	cur := name
-	for len(rev) < maxChainDepth {
+	push := func(n string) bool {
+		if n == "" || seen[n] || len(rev) >= maxChainDepth {
+			return false
+		}
+		if _, known := dialerOf(n); !known {
+			return false
+		}
+		rev = append(rev, n)
+		seen[n] = true
+		cur = n
+		return true
+	}
+	for {
 		d, ok := dialerOf(cur)
-		if !ok || d == "" || seen[d] {
+		if !ok || !push(d) {
 			break
 		}
-		if _, known := dialerOf(d); !known {
-			break
+		for push(selectedOf(cur)) { // 组里选中的还是组时一路往下
 		}
-		rev = append(rev, d)
-		seen[d] = true
-		cur = d
 	}
 	for i, j := 0, len(rev)-1; i < j; i, j = i+1, j-1 {
 		rev[i], rev[j] = rev[j], rev[i]
@@ -236,6 +247,25 @@ func dialerLookup(all map[string]C.Proxy) func(string) (string, bool) {
 	}
 }
 
+// selectedLookup 返回组当前选中的成员名：select / url-test / fallback 有唯一选中项，其余（负载均衡、普通节点）为空串。
+func selectedLookup(all map[string]C.Proxy) func(string) string {
+	return func(name string) string {
+		p, ok := all[name]
+		if !ok {
+			return ""
+		}
+		g, ok := p.Adapter().(outboundgroup.ProxyGroup)
+		if !ok {
+			return ""
+		}
+		switch p.Type() {
+		case C.Selector, C.URLTest, C.Fallback:
+			return g.Now()
+		}
+		return ""
+	}
+}
+
 func groupTestURL(g C.Proxy) string {
 	raw, err := g.Adapter().MarshalJSON()
 	if err == nil {
@@ -265,7 +295,7 @@ func currentVias() map[string]string {
 
 func snapshotGroups() []groupJSON {
 	all := tunnel.Proxies()
-	dialerOf := dialerLookup(all)
+	dialerOf, selectedOf := dialerLookup(all), selectedLookup(all)
 	viaMap := currentVias()
 	out := []groupJSON{}
 	for _, name := range groupNames(all) {
@@ -274,7 +304,7 @@ func snapshotGroups() []groupJSON {
 		url := groupTestURL(p)
 		gj := groupJSON{Name: name, Now: g.Now(), TestURL: url, Proxies: []proxyJSON{}}
 		for _, m := range g.Proxies() {
-			chain, relays := withVias(chainOf(m.Name(), dialerOf), viaMap)
+			chain, relays := withVias(chainOf(m.Name(), dialerOf, selectedOf), viaMap)
 			gj.Proxies = append(gj.Proxies, proxyJSON{
 				Name:   m.Name(),
 				Type:   m.Type().String(),
@@ -365,7 +395,8 @@ func SelectProxy(group string, name string) error {
 	if activeDNSRoutes != nil {
 		activeDNSRoutes.reconcile(tunnel.Proxies(), statistic.DefaultManager, clearDNSCache)
 	}
-	logf("info", "select: %s -> %s (closed %d connections)", group, name, closed)
+	// 组名、节点名是配置内容，不进日志
+	logf("info", "select: closed %d connections", closed)
 
 	bumpGroups(gen, currentExit(), true)
 	return nil

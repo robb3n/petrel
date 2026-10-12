@@ -11,7 +11,8 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 日志门面：Kotlin 侧的日志一律走这里，不直接调 android.util.Log。
- * 照旧打 logcat（tag [TAG]），同时按 [shouldPersist] 把行写进 `files/logs/petrel.log`（轮转见 [RotatingLogFile]）。
+ * 照旧打 logcat（tag [TAG]），同时按 [shouldPersist] 把行写进 `files/logs/petrel.log`（轮转见 [RotatingLogFile]）；
+ * 写进文件的那份先经 [redactForFile] 改写，logcat 是全文。
  *
  * 调用方线程上不做文件 IO：Go 的 Host.Log 可能在 tailscale 持锁时回调进来，还有主线程与系统回调线程上的调用。
  * 所以只把格式化好的行 offer 进有界队列（满了丢弃并计数），由守护线程 `petrel-log` 写文件。唯一的例外是 [fatal]。
@@ -75,6 +76,12 @@ object PLog {
     }
 
     /**
+     * 持着写文件的那把锁执行 [block]：期间没有行写进文件、也不会轮转，两个日志文件是同一时刻的一对。
+     * 给「导出日志」拷文件用。锁内只做拷贝：写线程和 [fatal] 都在等这把锁。
+     */
+    fun <T> withFiles(block: () -> T): T = synchronized(lock) { block() }
+
+    /**
      * 未捕获异常：在崩溃线程上**同步**写。先把队列里剩下的行写掉，再写 [fatalLines]。
      * 不打 logcat：随后交回的原 handler 会照常记 FATAL EXCEPTION。
      */
@@ -95,7 +102,8 @@ object PLog {
 
     private fun enqueue(level: Char, msg: String, tr: Throwable? = null) {
         if (dir == null || !shouldPersist(level, msg)) return
-        val text = if (tr == null) msg else "$msg (${throwableChain(tr)})"
+        val line = redactForFile(msg)
+        val text = if (tr == null) line else "$line (${throwableChain(tr)})"
         if (!queue.offer(formatLine(System.currentTimeMillis(), Process.myPid(), level, text))) dropped.incrementAndGet()
     }
 

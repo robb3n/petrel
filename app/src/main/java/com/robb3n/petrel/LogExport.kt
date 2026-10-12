@@ -55,15 +55,13 @@ object LogExport {
     private fun build(app: Context): Result {
         PLog.flush(500)
         val dir = PLog.logDir(app)
-        val parts = listOf(File(dir, LOG_BACKUP), File(dir, LOG_FILE)).filter { it.isFile && it.length() > 0 }
-        if (parts.isEmpty()) return Result.Empty
         return try {
             val exportDir = File(app.cacheDir, "export")
             exportDir.deleteRecursively()
             exportDir.mkdirs()
             val now = System.currentTimeMillis()
             val out = File(exportDir, "petrel-${BuildConfig.VERSION_NAME}-${FILE_TIME.format(LocalDateTime.now())}.log")
-            out.outputStream().buffered().use { o ->
+            val copied = out.outputStream().buffered().use { o ->
                 val header = buildString {
                     appendLine("Petrel v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
                     appendLine("${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
@@ -72,7 +70,12 @@ object LogExport {
                     appendLine()
                 }
                 o.write(header.toByteArray(Charsets.UTF_8))
-                parts.forEach { f -> f.inputStream().use { it.copyTo(o) } }
+                // 两个文件在写线程的锁里一起拷，见 copyLogFiles
+                PLog.withFiles { copyLogFiles(dir, o) }
+            }
+            if (copied == 0L) {
+                out.delete()
+                return Result.Empty
             }
             Result.Ready(FileProvider.getUriForFile(app, "${app.packageName}.logs", out))
         } catch (e: Exception) {

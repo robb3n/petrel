@@ -5,7 +5,9 @@ import (
 	"maps"
 	"net"
 	"net/netip"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/metacubex/mihomo/adapter"
 	"github.com/metacubex/mihomo/adapter/outbound"
@@ -226,5 +228,84 @@ func TestDNSRoutesOptOutAndSessionIsolation(t *testing.T) {
 	}
 	if pollDNSRoutes(context.Background(), w, currentGen()-1) {
 		t.Fatal("old generation polled")
+	}
+}
+
+// The dialer-proxy group switches while a DoH dial is still in flight on the old
+// front. That connection registers only after the sweep which noticed the
+// change, and its chain looks exactly like a fresh one: the front hop is a
+// separate tracker. It is removed when the late-dial window closes.
+func TestDNSRoutesLateDialAfterDialerChange(t *testing.T) {
+	a, b := dnsTestNode("front-a"), dnsTestNode("front-b")
+	front := dnsTestGroup(t, "front", "select", a, b)
+	jp := dnsTestNode("jp")
+	jp.dialer = "front"
+	root := dnsTestGroup(t, "PROXY", "select", jp)
+	all := map[string]C.Proxy{"PROXY": root, "front": front}
+	mgr := &statistic.Manager{}
+	clock := time.Now()
+	w := &dnsRouteWatch{root: "PROXY", last: snapshotDNSRoute("PROXY", all), now: func() time.Time { return clock }}
+	clears := 0
+	clear := func() { clears++ }
+
+	old := dnsTestTrack(t, mgr, C.INNER, "1.1.1.1", 443, jp, root)
+	_ = front.Adapter().(outboundgroup.SelectAble).Set("front-b")
+	if changed, n := w.reconcile(all, mgr, clear); !changed || n != 1 || clears != 1 || mgr.Get(old.ID()) != nil {
+		t.Fatal("first sweep missed the registered DNS connection")
+	}
+
+	// Registered after the first sweep, still riding front-a.
+	late := dnsTestTrack(t, mgr, C.INNER, "8.8.8.8", 443, jp, root)
+	web := dnsTestTrack(t, mgr, C.TUN, "8.8.8.8", 443, jp, root)
+	clock = clock.Add(dnsRouteInterval)
+	if changed, n := w.reconcile(all, mgr, clear); changed || n != 0 || clears != 1 {
+		t.Fatal("window swept before it closed")
+	}
+
+	// Dialed after the window: certainly on the new front.
+	clock = clock.Add(dnsLateDialWindow)
+	fresh := dnsTestTrack(t, mgr, C.INNER, "1.1.1.1", 443, jp, root)
+	fresh.Info().Start = clock
+	if changed, n := w.reconcile(all, mgr, clear); changed || n != 1 || clears != 2 {
+		t.Fatalf("late old dial not removed: closed=%d clears=%d", n, clears)
+	}
+	if mgr.Get(late.ID()) != nil {
+		t.Fatal("late DNS connection on the old front survived")
+	}
+	if mgr.Get(fresh.ID()) == nil || mgr.Get(web.ID()) == nil {
+		t.Fatal("window swept a fresh DNS connection or ordinary traffic")
+	}
+	// One sweep only.
+	again := dnsTestTrack(t, mgr, C.INNER, "8.8.8.8", 443, jp, root)
+	again.Info().Start = clock
+	clock = clock.Add(dnsRouteInterval)
+	if changed, n := w.reconcile(all, mgr, clear); changed || n != 0 || clears != 2 || !w.lateUntil.IsZero() {
+		t.Fatal("window did not close after its sweep")
+	}
+}
+
+// A switch on the main path is visible in every old chain, so later rounds catch
+// late dials exactly and no window (which would also hit fresh connections) opens.
+func TestDNSRoutesNoWindowForVisibleSwitch(t *testing.T) {
+	jp, us := dnsTestNode("jp"), dnsTestNode("us")
+	auto := dnsTestGroup(t, "AUTO", "select", jp, us)
+	root := dnsTestGroup(t, "PROXY", "select", auto)
+	all := map[string]C.Proxy{"PROXY": root}
+	w := &dnsRouteWatch{root: "PROXY", last: snapshotDNSRoute("PROXY", all)}
+	if got := w.last.chain("PROXY"); !slices.Equal(got, C.Chain{"jp", "AUTO", "PROXY"}) {
+		t.Fatal(got)
+	}
+	_ = auto.Adapter().(outboundgroup.SelectAble).Set("us")
+	if changed, _ := w.reconcile(all, &statistic.Manager{}, func() {}); !changed || !w.lateUntil.IsZero() {
+		t.Fatal("visible switch opened a late-dial window")
+	}
+
+	// Load balancing hides which member a chain went through: a membership change opens it.
+	a, b := dnsTestNode("a"), dnsTestNode("b")
+	all = map[string]C.Proxy{"PROXY": dnsTestGroup(t, "PROXY", "load-balance", a, b)}
+	w = &dnsRouteWatch{root: "PROXY", last: snapshotDNSRoute("PROXY", all)}
+	all["PROXY"] = dnsTestGroup(t, "PROXY", "load-balance", a)
+	if changed, _ := w.reconcile(all, &statistic.Manager{}, func() {}); !changed || w.lateUntil.IsZero() {
+		t.Fatal("balancing change did not open a late-dial window")
 	}
 }

@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/metacubex/mihomo/component/trie"
+	"github.com/metacubex/mihomo/tunnel"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -74,6 +76,12 @@ func applyDNSPolicy(cfg map[string]any) error {
 	if proxy == "" {
 		return nil
 	} // empty / tailnet-only config has no Internet proxy
+	// The managed rules below only take effect in rule mode. Rewriting an
+	// explicit global/direct would silently reroute what the user sent through
+	// GLOBAL, so refuse it. Mihomo parses the mode case-insensitively.
+	if m, _ := cfg["mode"].(string); strings.ToLower(m) == "global" || strings.ToLower(m) == "direct" {
+		return fmt.Errorf("mode: %s 与托管的 DNS 和国内分流不兼容：请改成 mode: rule，或用 petrel-dns.mode: original 保留原配置", m)
+	}
 	cfg["mode"] = "rule"
 
 	providers, _ := cfg["rule-providers"].(map[string]any)
@@ -131,12 +139,15 @@ func applyDNSPolicy(cfg map[string]any) error {
 			parts[j] = strings.TrimSpace(parts[j])
 		}
 		var key string
-		switch parts[0] {
+		switch ruleType(parts[0]) {
 		case "DOMAIN":
 			key = parts[1]
 		case "DOMAIN-SUFFIX":
 			key = "+." + parts[1]
 		default:
+			continue
+		}
+		if !dnsPolicyDomain(key) {
 			continue
 		}
 		if parts[2] == "DIRECT" {
@@ -184,8 +195,8 @@ func applyDNSPolicy(cfg map[string]any) error {
 	for i, raw := range rules {
 		r, _ := raw.(string)
 		p := strings.Split(r, ",")
-		if len(p) > 0 && (strings.TrimSpace(p[0]) == "MATCH" || strings.TrimSpace(p[0]) == "FINAL" ||
-			(len(p) > 1 && strings.TrimSpace(p[0]) == "GEOIP" && strings.EqualFold(strings.TrimSpace(p[1]), "CN"))) {
+		t := ruleType(p[0])
+		if t == "MATCH" || t == "FINAL" || (len(p) > 1 && t == "GEOIP" && strings.EqualFold(strings.TrimSpace(p[1]), "CN")) {
 			insert = i
 			break
 		}
@@ -197,6 +208,23 @@ func applyDNSPolicy(cfg map[string]any) error {
 	merged = append(merged, "RULE-SET,"+cnProvider+",DIRECT")
 	cfg["rules"] = append(merged, rules[insert:]...)
 	return nil
+}
+
+// Mihomo upper-cases the rule type before dispatching (ParseRulePayload), so a
+// lower-case rule is a live routing rule. Payloads and targets keep their case.
+func ruleType(field string) string { return strings.ToUpper(strings.TrimSpace(field)) }
+
+// A routing rule accepts any payload, but a nameserver-policy key is parsed
+// separately and more strictly: "geosite:" / "rule-set:" keys name a matcher,
+// and everything else must pass the domain-trie validation or the whole config
+// is rejected. Payloads that fail this stay routing-only.
+func dnsPolicyDomain(key string) bool {
+	lower := strings.ToLower(key)
+	if strings.HasPrefix(lower, "geosite:") || strings.HasPrefix(lower, "rule-set:") {
+		return false
+	}
+	_, err := trie.ValidAndSplitDomain(key)
+	return err == nil
 }
 
 func dnsDomainsOverlap(a, b string) bool {
@@ -227,7 +255,10 @@ func dnsProxy(cfg map[string]any, requested string) (string, error) {
 		}
 	}
 	valid := func(n string) bool {
-		if !names[n] || n == tsProxyName {
+		// "RULES" is the DNS dialer's keyword for "follow the routing rules",
+		// tested before any proxy lookup: an outbound of that name would let a
+		// DIRECT rule carry the protected DoH.
+		if !names[n] || n == tsProxyName || n == tunnel.DnsRespectRules {
 			return false
 		}
 		for _, b := range builtinProxyNames {
@@ -240,7 +271,7 @@ func dnsProxy(cfg map[string]any, requested string) (string, error) {
 	}
 	if requested != "" {
 		if !valid(requested) {
-			return "", fmt.Errorf("petrel-dns.proxy: choose an existing proxy/group (not DIRECT, ts or a name containing &/#/=)")
+			return "", fmt.Errorf("petrel-dns.proxy: choose an existing proxy/group (not DIRECT, RULES, ts or a name containing &/#/=)")
 		}
 		return requested, nil
 	}
@@ -251,7 +282,7 @@ func dnsProxy(cfg map[string]any, requested string) (string, error) {
 		for _, raw := range rules {
 			r, _ := raw.(string)
 			p := strings.Split(r, ",")
-			if len(p) == 2 && (strings.TrimSpace(p[0]) == "MATCH" || strings.TrimSpace(p[0]) == "FINAL") && valid(strings.TrimSpace(p[1])) {
+			if t := ruleType(p[0]); len(p) == 2 && (t == "MATCH" || t == "FINAL") && valid(strings.TrimSpace(p[1])) {
 				return strings.TrimSpace(p[1]), nil
 			}
 		}
@@ -269,9 +300,30 @@ func dnsProxy(cfg map[string]any, requested string) (string, error) {
 // atomically and only when needed; a failed import cannot replace user data.
 func ensureDNSRules(home string) error {
 	p := filepath.Join(home, cnRulePath)
-	if b, err := os.ReadFile(p); err == nil && bytes.Equal(b, cnRules) {
-		return nil
+	if b, err := os.ReadFile(p); err != nil || !bytes.Equal(b, cnRules) {
+		if err := installDNSRules(p); err != nil {
+			return err
+		}
 	}
+	pruneDNSRules(p)
+	return nil
+}
+
+// Content addressing leaves the previous snapshot behind on every update. Once
+// the current one is in place, drop the others carrying Petrel's own prefix;
+// leftovers never fail a start.
+func pruneDNSRules(current string) {
+	dir := filepath.Dir(current)
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		n := e.Name()
+		if n != filepath.Base(current) && strings.HasPrefix(n, cnProvider+"-") && strings.HasSuffix(n, ".mrs") {
+			_ = os.Remove(filepath.Join(dir, n))
+		}
+	}
+}
+
+func installDNSRules(p string) error {
 	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 		return err
 	}

@@ -335,20 +335,45 @@ func apply(assets, dir, reviewed string) error {
 		return fmt.Errorf("repository baseline changed; prepare a fresh diff")
 	}
 	backup := filepath.Join(dir, "previous")
-	if err = os.Mkdir(backup, 0o700); err != nil {
-		return err
-	}
-	if err = saveBundle(backup, before); err != nil {
-		return err
-	}
 	guard := rollbackGuard{before.fingerprint(), next.fingerprint(), R.Hash(next.mrs), R.Hash(next.manifest)}
-	if err = write(backup, "transaction.json", jsonBytes(guard)); err != nil {
+	if err = saveRollback(backup, before, guard); err != nil {
 		return err
 	}
 	if err = replaceBundle(assets, before, next); err != nil {
 		return err
 	}
 	fmt.Printf("Applied %s; rollback bundle: %s\n", reviewed, backup)
+	return nil
+}
+
+// A candidate can be applied again: after a failed replaceBundle, or after a
+// rollback. previous/ then already holds this transaction's record and is
+// reused as is. Anything else found there is someone's only way back and is
+// never overwritten.
+func saveRollback(backup string, before bundle, guard rollbackGuard) error {
+	if err := os.Mkdir(backup, 0o700); err == nil {
+		if err = saveBundle(backup, before); err != nil {
+			return err
+		}
+		return write(backup, "transaction.json", jsonBytes(guard))
+	} else if !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	data, err := os.ReadFile(filepath.Join(backup, "transaction.json"))
+	if err != nil {
+		return fmt.Errorf("%s exists without a transaction record (an apply stopped before touching the assets); check and remove it, or prepare a fresh candidate: %w", backup, err)
+	}
+	var found rollbackGuard
+	if err = json.Unmarshal(data, &found); err != nil {
+		return fmt.Errorf("%s has an unreadable transaction record; prepare a fresh candidate: %w", backup, err)
+	}
+	if found != guard {
+		return fmt.Errorf("%s belongs to another transaction (bundle %.12s -> %.12s, this apply is %.12s -> %.12s); if that update is still installed roll it back with this directory first, otherwise prepare a fresh candidate",
+			backup, found.Before, found.After, guard.Before, guard.After)
+	}
+	if saved, err := readBundle(backup); err != nil || saved.fingerprint() != guard.Before {
+		return fmt.Errorf("%s no longer holds the bundle its transaction record describes; prepare a fresh candidate", backup)
+	}
 	return nil
 }
 func rollback(assets, dir, reviewed string) error {

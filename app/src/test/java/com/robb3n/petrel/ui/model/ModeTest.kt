@@ -11,6 +11,7 @@ import com.robb3n.petrel.ProxyGroupUi
 import com.robb3n.petrel.ProxyUi
 import com.robb3n.petrel.TailnetSelfUi
 import com.robb3n.petrel.TailnetStatusUi
+import com.robb3n.petrel.UiTone
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -211,5 +212,72 @@ class ModeNodesTest {
 
     @Test fun tailnetPageIsDisabledInProxyOnly() {
         assertEquals(TailnetUi.Disabled, buildTailnet(running(ConnMode.Proxy), null, "op12-petrel"))
+    }
+}
+
+class ModelTextTest {
+    private fun settings(mode: ConnMode, info: ConfigInfo) = buildSettings(mode, UiTone.Auto, ExitIpPlace.Card, "0.2.0", info)
+
+    @Test fun settingsNoteAsksForAConfigWhileProxyIsOn() {
+        // 没有配置时拨开「代理」只存偏好：设置页要交代为什么没生效
+        ConnMode.entries.forEach { assertEquals(it.settingsDesc, settings(it, cfg).modeNote) }
+        assertEquals(ConnMode.Tailnet.settingsDesc, settings(ConnMode.Tailnet, noCfg).modeNote)
+        assertEquals(
+            "两个都开（默认）：tailnet 是代理链的第一跳，全部流量按配置分流。\n还没有配置：先导入一份配置，代理才会启用。",
+            settings(ConnMode.Both, noCfg).modeNote,
+        )
+        assertTrue(settings(ConnMode.Proxy, noCfg).modeNote.endsWith("\n$PROXY_NEEDS_CONFIG_NOTE"))
+        assertEquals("还没有配置", settings(ConnMode.Both, noCfg).configName)
+    }
+
+    @Test fun exitIpWritingsFollowDirect() {
+        val ready = ExitIpUi.Ready(ipView(la), refreshing = false)
+        assertEquals("美国 · 洛杉矶", ready.placeShort(direct = false))
+        assertEquals("直连 · 美国 · 洛杉矶", ready.placeShort(direct = true))
+        assertEquals("美国 · 加利福尼亚州 · 洛杉矶", ready.placeFull(direct = false))
+        assertEquals("直连 · 美国 · 加利福尼亚州 · 洛杉矶", ready.placeFull(direct = true))
+        assertEquals("经手机网络查询", exitIpLoadingSub(direct = true))
+        assertEquals("经当前出口查询", exitIpLoadingSub(direct = false))
+        assertEquals("查不到出口 IP · 点右上角刷新重试", ExitIpUi.Unavailable(EXIT_FAILED_HINT).failedLine)
+        assertEquals("查询出口 IP…", EXIT_IP_LOADING)
+        assertEquals("查不到出口 IP", EXIT_IP_FAILED)
+    }
+
+    @Test fun homeRowsForConfigAndDisabledProxy() {
+        assertEquals("op12.local.yaml · 1月1日导入", configSummary(cfg, utc).homeLine)
+        assertEquals("还没有配置", configSummary(noCfg, utc).homeLine)
+        assertEquals("仅 tailnet 模式下未启用", PROXY_DISABLED_SUB)
+        assertEquals("未启用", PROXY_DISABLED_END)
+    }
+
+    @Test fun nestedGroupWhoseLeafNeedsTsIsReportedUnavailable() {
+        // 主组选中子组、子组里选中的节点要经过 ts：出口 IP 那边按叶子判断不去查，连接页也得说出口不可用，不能什么都不显示
+        val region = ProxyUi("REGION", "Selector", listOf("REGION"), 90)
+        val g = listOf(
+            ProxyGroupUi("PROXY", "REGION", "", listOf(region, direct)),
+            ProxyGroupUi("REGION", "us", "", listOf(viaTs, direct)),
+        )
+        val ui = home(running(ConnMode.Proxy), g)
+        assertEquals(ConnStatus.ExitNeedsTailnet, ui.status)
+        assertEquals(ExitIpUi.Unavailable(EXIT_BLOCKED_HINT), ui.exitIp)
+        assertEquals("不可用", ui.exitView.text)
+        // 子组里换成不经过 ts 的节点就恢复
+        val ok = home(running(ConnMode.Proxy), listOf(g[0], g[1].copy(now = "jp")))
+        assertEquals(ConnStatus.Connected, ok.status)
+        // tailnet 开着时不受影响
+        assertEquals(ConnStatus.Connected, home(running(ConnMode.Both), g).status)
+    }
+
+    @Test fun frontGroupSelectingTsBlocksTheExitInProxyOnly() {
+        // 前置是组、组里选中 ts：Go 侧把选中的成员展开进链，仅代理模式下这个出口认得出用不了
+        val exit = ProxyUi("EXIT", "ss", listOf("ts", "FRONT", "EXIT"), 120, addr = "203.0.113.7:443")
+        val g = listOf(ProxyGroupUi("PROXY", "EXIT", "", listOf(exit, direct)))
+        assertEquals(
+            listOf(Hop("ts", HopRole.Tailnet, blocked = true), Hop("FRONT", HopRole.Front), Hop("EXIT", HopRole.Exit)),
+            chainOf(g, tailnetOn = false),
+        )
+        val ui = home(running(ConnMode.Proxy), g)
+        assertEquals(ConnStatus.ExitNeedsTailnet, ui.status)
+        assertTrue(buildNodes(running(ConnMode.Proxy), g, testing = false).groups[0].members[0].blocked)
     }
 }

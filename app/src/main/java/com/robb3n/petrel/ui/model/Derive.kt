@@ -17,6 +17,7 @@ import com.robb3n.petrel.TailnetPeerUi
 import com.robb3n.petrel.TailnetStatusUi
 import com.robb3n.petrel.UiTone
 import com.robb3n.petrel.TS_NODE
+import com.robb3n.petrel.exitLeaf
 import com.robb3n.petrel.firstIPv4
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -281,7 +282,8 @@ fun buildHome(
     val first = groups.firstOrNull()
     val exit = currentExit(groups)
     val showChain = info.present && s.running && mode.proxyOn
-    val exitBlocked = mode == ConnMode.Proxy && exit?.viaTailnet == true
+    // 用不了看的是实际出口那个节点：主组选中的是子组时，沿各组的选中项找到它
+    val exitBlocked = mode == ConnMode.Proxy && exitLeaf(groups)?.viaTailnet == true
     val status = connStatus(s, info.present, mode, exitBlocked)
     val chain = if (showChain) chainOf(groups, mode.tailnetOn) else emptyList()
     val exitDelay = if (status == ConnStatus.NeedsLogin || !showChain || exit == null) Delay.UNKNOWN else Delay(exit.delay)
@@ -320,7 +322,7 @@ internal fun nodeIp(p: ProxyUi, cache: Map<String, ExitIpInfo>, filling: Boolean
     return NodeIp.Missing(
         when {
             blocked -> "还没记下出口 IP"
-            filling -> "查询出口 IP…"
+            filling -> EXIT_IP_LOADING
             else -> "还没记下出口 IP，测延迟时补上"
         },
     )
@@ -401,7 +403,16 @@ fun buildConfig(
 ): ConfigUi = ConfigUi(configSummary(info, zone), import.busy, import.error, geoText(geo), geo == GeoIpStatus.Corrupt, geoBusy)
 
 fun buildSettings(mode: ConnMode, tone: UiTone, place: ExitIpPlace, versionName: String, info: ConfigInfo): SettingsUi =
-    SettingsUi(mode, tone, place, versionName, if (info.present) info.name else NO_CONFIG_TEXT)
+    SettingsUi(mode, tone, place, versionName, if (info.present) info.name else NO_CONFIG_TEXT, settingsModeNote(mode, info.present))
 
-/** 没有配置时的说明：设置页「配置」行的副标题、配置页的说明行。 */
+/**
+ * 设置页「连接」浮岛下的说明：模式的说明（[settingsDesc]）；开着代理却还没有配置时另起一行，提示先导入。
+ * 没有配置时拨开「代理」只存偏好、不重启正在跑的仅 tailnet，这一行就是给人的交代。
+ */
+internal fun settingsModeNote(mode: ConnMode, configPresent: Boolean): String =
+    if (mode.proxyOn && !configPresent) "${mode.settingsDesc}\n$PROXY_NEEDS_CONFIG_NOTE" else mode.settingsDesc
+
+internal const val PROXY_NEEDS_CONFIG_NOTE = "还没有配置：先导入一份配置，代理才会启用。"
+
+/** 没有配置时的说明：连接页与设置页「配置」行的副标题、配置页的说明行。 */
 internal const val NO_CONFIG_TEXT = "还没有配置"

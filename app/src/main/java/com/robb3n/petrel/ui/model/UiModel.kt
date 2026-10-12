@@ -214,6 +214,9 @@ data class ConfigSummary(
 
     /** `10月3日 17:29 导入`（配置页）；没有配置时为空串。 */
     val stampFull: String get() = if (present) "$dateTime $verb" else ""
+
+    /** 连接页「配置」行的副文字：`op12.yaml · 10月3日导入`；没有配置时「还没有配置」。 */
+    val homeLine: String get() = if (present) "$name · $stampShort" else NO_CONFIG_TEXT
 }
 
 /** 统计格的数字颜色（画稿 `.stat.s0 / .s2 / .s3`）。 */
@@ -251,6 +254,26 @@ sealed interface ExitIpUi {
     /** 查不到：[hint] 说明原因或下一步。 */
     data class Unavailable(val hint: String) : ExitIpUi
 }
+
+/** 出口 IP 查询中、没查到时的固定文字（三种摆法共用）。 */
+const val EXIT_IP_LOADING = "查询出口 IP…"
+const val EXIT_IP_FAILED = "查不到出口 IP"
+
+/** 状态卡那一行里 IP 后面的地名；[direct]（仅 tailnet，查的是手机自己的网络）时前面写「直连」。 */
+fun ExitIpUi.Ready.placeShort(direct: Boolean): String = if (direct) "直连 · ${ip.short}" else ip.short
+
+/** 独立卡片里 IP 下面的位置，[direct] 同 [placeShort]。 */
+fun ExitIpUi.Ready.placeFull(direct: Boolean): String = if (direct) "直连 · ${ip.location}" else ip.location
+
+/** 独立卡片查询中的副文字：经哪条路查。 */
+fun exitIpLoadingSub(direct: Boolean): String = if (direct) "经手机网络查询" else "经当前出口查询"
+
+/** 状态卡那一行没查到时的整句：「查不到出口 IP · <下一步>」。 */
+val ExitIpUi.Unavailable.failedLine: String get() = "$EXIT_IP_FAILED · $hint"
+
+/** 仅 tailnet 时连接页「代理」行的副文字与右侧值。 */
+const val PROXY_DISABLED_SUB = "仅 tailnet 模式下未启用"
+const val PROXY_DISABLED_END = "未启用"
 
 data class HomeUi(
     val status: ConnStatus,
@@ -451,9 +474,11 @@ data class SettingsUi(
     val versionName: String,
     /** 「配置」行的副标题：当前文件名；没有配置时「还没有配置」。 */
     val configName: String,
+    /** 「连接」浮岛下的说明，见 [settingsModeNote]。 */
+    val modeNote: String = mode.settingsDesc,
 )
 
-/** 设置页「连接」浮岛下的说明：随两个开关的组合变。 */
+/** 设置页「连接」浮岛下对模式的说明：随两个开关的组合变。 */
 val ConnMode.settingsDesc: String
     get() = when (this) {
         ConnMode.Both -> "两个都开（默认）：tailnet 是代理链的第一跳，全部流量按配置分流。"

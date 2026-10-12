@@ -60,6 +60,12 @@ func configIPv6(user []byte) bool {
 
 // injectConfig 同 InjectConfig，另外返回警告与中转标注（节点名 → petrel-via 的值）。
 func injectConfig(user []byte, tunFd int, socksAddr string, socksPass string, fallbackSecret string) ([]byte, []string, map[string]string, error) {
+	return injectConfigFor(user, tunFd, socksAddr, socksPass, fallbackSecret, true)
+}
+
+// injectConfigFor 是 injectConfig 的本体。hijackDNS 为 false 时不劫持 53 端口：仅 tailnet 的内置配置没有 dns 段，
+// mihomo 的 DNS 服务没开，被劫持的查询只会失败；这时发往 tailnet 上 DNS 服务器（100.x.y.z:53）的查询要同其它流量一样交给 ts。
+func injectConfigFor(user []byte, tunFd int, socksAddr string, socksPass string, fallbackSecret string, hijackDNS bool) ([]byte, []string, map[string]string, error) {
 	var cfg map[string]any
 	if err := yaml.Unmarshal(user, &cfg); err != nil {
 		return nil, nil, nil, fmt.Errorf("parse config: %w", err)
@@ -79,6 +85,11 @@ func injectConfig(user []byte, tunFd int, socksAddr string, socksPass string, fa
 
 	var warnings []string
 
+	// 不劫持要显式给空表：mihomo 的 tun 缺省就劫持 0.0.0.0:53，省略这个键等于照旧劫持
+	hijack := []any{}
+	if hijackDNS {
+		hijack = []any{"any:53"}
+	}
 	// gvisor 而不是 system：VpnService 把本 App 自身排除在外（防自环），
 	// system / mixed stack 靠内核 NAT，回包会绕过 tun 而断链。
 	cfg["tun"] = map[string]any{
@@ -87,7 +98,7 @@ func injectConfig(user []byte, tunFd int, socksAddr string, socksPass string, fa
 		"stack":                 "gvisor",
 		"auto-route":            false,
 		"auto-detect-interface": false,
-		"dns-hijack":            []any{"any:53"},
+		"dns-hijack":            hijack,
 		"mtu":                   1400,
 	}
 
@@ -176,6 +187,7 @@ func injectConfig(user []byte, tunFd int, socksAddr string, socksPass string, fa
 const loopbackHost = "127.0.0.1"
 
 // loopbackInbounds 把 listeners 每项的 listen 与 tunnels 每项的本地地址改成 127.0.0.1，返回每处改写的警告。
+// 警告会进日志，只带序号，不带端口等配置内容。
 // tunnels 有两种写法：字符串 "tcp/udp,<本地地址>,<目标>,<代理>"，或带 address 字段的 map。格式认不出的条目原样留给 mihomo 报错。
 func loopbackInbounds(cfg map[string]any) []string {
 	var warnings []string
@@ -202,13 +214,13 @@ func loopbackInbounds(cfg map[string]any) []string {
 				if addr, changed := loopbackAddr(strings.TrimSpace(parts[1])); changed {
 					parts[1] = addr
 					list[i] = strings.Join(parts, ",")
-					warnings = append(warnings, fmt.Sprintf("tunnel %d: local address set to %s", i, addr))
+					warnings = append(warnings, fmt.Sprintf("tunnel %d: local address set to %s", i, loopbackHost))
 				}
 			case map[string]any:
 				a, _ := v["address"].(string)
 				if addr, changed := loopbackAddr(a); changed {
 					v["address"] = addr
-					warnings = append(warnings, fmt.Sprintf("tunnel %d: local address set to %s", i, addr))
+					warnings = append(warnings, fmt.Sprintf("tunnel %d: local address set to %s", i, loopbackHost))
 				}
 			}
 		}

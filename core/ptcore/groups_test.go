@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	C "github.com/metacubex/mihomo/constant"
 )
 
 func dialers(m map[string]string, known ...string) func(string) (string, bool) {
@@ -23,56 +25,140 @@ func dialers(m map[string]string, known ...string) func(string) (string, bool) {
 	}
 }
 
+// selections 是 chainOf 的 selectedOf：组名 → 当前选中的成员，不在表里的返回空串。
+func selections(m map[string]string) func(string) string {
+	return func(name string) string { return m[name] }
+}
+
 func TestChainOf(t *testing.T) {
 	cases := []struct {
-		name   string
-		member string
-		dialer func(string) (string, bool)
-		want   []string
+		name     string
+		member   string
+		dialer   func(string) (string, bool)
+		selected map[string]string
+		want     []string
 	}{
 		{
 			"三跳",
 			"us-lax",
 			dialers(map[string]string{"us-lax": "front", "front": "ts"}, "ts"),
+			nil,
 			[]string{"ts", "front", "us-lax"},
 		},
 		{
 			"没有 dialer-proxy",
 			"solo",
 			dialers(map[string]string{"solo": ""}),
+			nil,
 			[]string{"solo"},
 		},
 		{
 			"环被截断",
 			"a",
 			dialers(map[string]string{"a": "b", "b": "c", "c": "a"}),
+			nil,
 			[]string{"c", "b", "a"},
 		},
 		{
 			"自己指向自己",
 			"a",
 			dialers(map[string]string{"a": "a"}),
+			nil,
 			[]string{"a"},
 		},
 		{
 			"引用了不存在的名字",
 			"a",
 			dialers(map[string]string{"a": "ghost"}),
+			nil,
 			[]string{"a"},
 		},
 		{
 			"名字含空格和中文",
 			"节点 一",
 			dialers(map[string]string{"节点 一": "前置 节点"}, "前置 节点"),
+			nil,
 			[]string{"前置 节点", "节点 一"},
+		},
+		{
+			"前置是组，组里选中 ts",
+			"EXIT",
+			dialers(map[string]string{"EXIT": "FRONT"}, "FRONT", "ts", "relay"),
+			map[string]string{"FRONT": "ts"},
+			[]string{"ts", "FRONT", "EXIT"},
+		},
+		{
+			"前置组选中的节点自己还有前置",
+			"EXIT",
+			dialers(map[string]string{"EXIT": "FRONT", "relay": "ts"}, "FRONT", "ts"),
+			map[string]string{"FRONT": "relay"},
+			[]string{"ts", "relay", "FRONT", "EXIT"},
+		},
+		{
+			"前置组里选中的还是组",
+			"EXIT",
+			dialers(map[string]string{"EXIT": "FRONT"}, "FRONT", "INNER", "ts"),
+			map[string]string{"FRONT": "INNER", "INNER": "ts"},
+			[]string{"ts", "INNER", "FRONT", "EXIT"},
+		},
+		{
+			"前置组没有唯一选中项（负载均衡）",
+			"EXIT",
+			dialers(map[string]string{"EXIT": "LB"}, "LB", "ts"),
+			nil,
+			[]string{"LB", "EXIT"},
+		},
+		{
+			"成员自己是组时不往里走",
+			"REGION",
+			dialers(map[string]string{"REGION": "", "A": "ts"}, "ts"),
+			map[string]string{"REGION": "A"},
+			[]string{"REGION"},
+		},
+		{
+			"组选中的成员绕回链里已有的节点",
+			"EXIT",
+			dialers(map[string]string{"EXIT": "FRONT"}, "FRONT"),
+			map[string]string{"FRONT": "EXIT"},
+			[]string{"FRONT", "EXIT"},
+		},
+		{
+			"组选中了不存在的名字",
+			"EXIT",
+			dialers(map[string]string{"EXIT": "FRONT"}, "FRONT"),
+			map[string]string{"FRONT": "ghost"},
+			[]string{"FRONT", "EXIT"},
 		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := chainOf(c.member, c.dialer); !reflect.DeepEqual(got, c.want) {
+			if got := chainOf(c.member, c.dialer, selections(c.selected)); !reflect.DeepEqual(got, c.want) {
 				t.Errorf("chain = %v, want %v", got, c.want)
 			}
 		})
+	}
+}
+
+// 真实的上游组：dialer-proxy 指向 select / fallback / url-test 组时取它的选中项，负载均衡没有唯一选中项。
+func TestChainThroughRealGroups(t *testing.T) {
+	ts, relay := dnsTestNode(tsProxyName), dnsTestNode("relay")
+	exit := dnsTestNode("EXIT")
+	exit.dialer = "FRONT"
+	for _, kind := range []string{"select", "fallback", "url-test"} {
+		front := dnsTestGroup(t, "FRONT", kind, ts, relay)
+		all := map[string]C.Proxy{"EXIT": exit, "FRONT": front, tsProxyName: ts, "relay": relay}
+		got := chainOf("EXIT", dialerLookup(all), selectedLookup(all))
+		if want := []string{tsProxyName, "FRONT", "EXIT"}; !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: chain = %v, want %v", kind, got, want)
+		}
+	}
+	lb := dnsTestGroup(t, "FRONT", "load-balance", ts, relay)
+	all := map[string]C.Proxy{"EXIT": exit, "FRONT": lb, tsProxyName: ts, "relay": relay}
+	if got, want := chainOf("EXIT", dialerLookup(all), selectedLookup(all)), []string{"FRONT", "EXIT"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("load-balance: chain = %v, want %v", got, want)
+	}
+	if got := selectedLookup(all)("EXIT"); got != "" {
+		t.Errorf("plain node has a selection: %q", got)
 	}
 }
 
@@ -83,7 +169,7 @@ func TestChainOfDepthLimit(t *testing.T) {
 		m[names[i]] = names[i+1]
 	}
 	m["n10"] = ""
-	got := chainOf("n0", dialers(m))
+	got := chainOf("n0", dialers(m), selections(nil))
 	if len(got) != maxChainDepth {
 		t.Fatalf("len = %d, want %d: %v", len(got), maxChainDepth, got)
 	}

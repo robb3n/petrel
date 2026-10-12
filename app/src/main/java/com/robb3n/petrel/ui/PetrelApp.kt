@@ -36,6 +36,7 @@ import com.robb3n.petrel.TailnetRepository
 import com.robb3n.petrel.UiPrefs
 import com.robb3n.petrel.applyHideRecents
 import com.robb3n.petrel.copyToClipboard
+import com.robb3n.petrel.restartAfterProxyToggle
 import com.robb3n.petrel.ui.model.PetrelActions
 import com.robb3n.petrel.ui.model.Tab
 import com.robb3n.petrel.ui.model.buildConfig
@@ -189,7 +190,12 @@ fun PetrelApp(
             setExitIpPlace = UiPrefs::setExitIp,
             // VPN 开着时改模式：重启服务生效（服务在 worker 上看 running，没在跑就什么也不做）
             setTailnetOn = { on -> if (ConnPrefs.setTailnet(on) && CoreBridge.state.value.active) PetrelVpnService.restart(ctx) },
-            setProxyOn = { on -> if (ConnPrefs.setProxy(on) && CoreBridge.state.value.active) PetrelVpnService.restart(ctx) },
+            // 没有配置时拨开代理只存偏好、不重启（restartAfterProxyToggle）；设置页的说明提示先导入配置（SettingsUi.modeNote）
+            setProxyOn = { on ->
+                val restart = ConnPrefs.setProxy(on) &&
+                    restartAfterProxyToggle(CoreBridge.state.value, ConnPrefs.mode.value, ConfigRepository.info.value.present)
+                if (restart) PetrelVpnService.restart(ctx)
+            },
             setHideRecents = { on ->
                 UiPrefs.setHideRecents(on)
                 applyHideRecents(ctx, on)
