@@ -106,7 +106,7 @@ val buildCore by tasks.registering(Exec::class) {
     dependsOn(verifyDNSRules)
     val coreDir = rootProject.layout.projectDirectory.dir("core")
     // 只改 Go 测试不进 AAR，不该触发 gomobile 重编
-    inputs.files(fileTree(coreDir) { include("**/*.go", "ptcore/assets/*.mrs", "ptcore/assets/*.json", "go.mod", "go.sum", "build.sh"); exclude("**/*_test.go") })
+    inputs.files(fileTree(coreDir) { include("**/*.go", "ptcore/assets/*.mrs", "ptcore/assets/*.json", "internal/cnrules/recovery-policy.json", "go.mod", "go.sum", "build.sh"); exclude("**/*_test.go") })
     outputs.file(coreAar)
     workingDir = coreDir.asFile
     commandLine("bash", "build.sh", coreAar.asFile.absolutePath)

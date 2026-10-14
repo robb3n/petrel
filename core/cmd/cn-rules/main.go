@@ -21,7 +21,7 @@ import (
 	R "github.com/robb3n/petrel/core/internal/cnrules"
 )
 
-var sourceNames = []string{"cn.list", "geolocation-cn.list"}
+var sourceNames = R.SourceNames(R.Schema)
 var shaPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 const repo = "https://api.github.com/repos/MetaCubeX/meta-rules-dat/commits/"
@@ -148,7 +148,7 @@ func prepareWithFetch(assets, dir, ref string, download func(string) ([]byte, er
 		inputs = append(inputs, b)
 		sources = append(sources, R.Source{URL: u, SHA256: R.Hash(b)})
 	}
-	entries, removed, err := R.Filter(inputs...)
+	entries, removed, recovery, err := R.Build(R.Schema, inputs...)
 	if err != nil {
 		return err
 	}
@@ -161,8 +161,8 @@ func prepareWithFetch(assets, dir, ref string, download func(string) ([]byte, er
 	if err != nil {
 		return err
 	}
-	m := R.Manifest{Schema: 1, Created: c.Commit.Committer.Date, Revision: c.SHA, Sources: sources, Transform: R.Transform,
-		Updates: "Pinned audited bundle; prepare, inspect diff, apply exact hash; never refresh on device.", MRSSHA256: R.Hash(mrs), Entries: len(compact), RemovedTLD: removed, Compiler: compiler()}
+	m := R.Manifest{Schema: R.Schema, Created: c.Commit.Committer.Date, Revision: c.SHA, Sources: sources, Transform: R.Transform,
+		Updates: "Pinned audited bundle; prepare, inspect diff, apply exact hash; never refresh on device.", MRSSHA256: R.Hash(mrs), Entries: len(compact), RemovedTLD: removed, Compiler: compiler(), PolicySHA256: R.Hash(R.RecoveryPolicy)}
 	candidate := bundle{mrs, jsonBytes(m)}
 	if _, _, err = candidate.verify(); err != nil {
 		return err
@@ -187,7 +187,7 @@ func prepareWithFetch(assets, dir, ref string, download func(string) ([]byte, er
 			return err
 		}
 	}
-	for name, b := range map[string][]byte{"added.txt": R.Text(added), "removed.txt": R.Text(deleted), "report.json": jsonBytes(r), "baseline.mrs": before.mrs, "baseline.sources.json": before.manifest} {
+	for name, b := range map[string][]byte{"added.txt": R.Text(added), "removed.txt": R.Text(deleted), "report.json": jsonBytes(r), "recovery.json": jsonBytes(recovery), "recovery-policy.json": R.RecoveryPolicy, "baseline.mrs": before.mrs, "baseline.sources.json": before.manifest} {
 		if err = write(tmp, name, b); err != nil {
 			return err
 		}
@@ -199,7 +199,7 @@ func prepareWithFetch(assets, dir, ref string, download func(string) ([]byte, er
 	return nil
 }
 
-// Rebuild candidates offline using both preserved raw sources. Review files are
+// Rebuild candidates offline using all preserved raw sources and review policy. Review files are
 // checked too, so the operator cannot inadvertently apply a different delta.
 func verifyCandidate(dir string) (bundle, bundle, error) {
 	b, err := readBundle(dir)
@@ -210,7 +210,7 @@ func verifyCandidate(dir string) (bundle, bundle, error) {
 	if err != nil {
 		return b, bundle{}, err
 	}
-	if m.Schema != 1 || m.Transform != R.Transform || !shaPattern.MatchString(m.Revision) || len(m.Sources) != 2 || m.Compiler != compiler() {
+	if m.Schema != R.Schema || m.Transform != R.Transform || !shaPattern.MatchString(m.Revision) || len(m.Sources) != len(sourceNames) || m.Compiler != compiler() || m.PolicySHA256 != R.Hash(R.RecoveryPolicy) {
 		return b, bundle{}, fmt.Errorf("candidate provenance/compiler mismatch")
 	}
 	var inputs [][]byte
@@ -228,7 +228,7 @@ func verifyCandidate(dir string) (bundle, bundle, error) {
 		}
 		inputs = append(inputs, data)
 	}
-	filtered, dropped, err := R.Filter(inputs...)
+	filtered, dropped, recovery, err := R.Build(m.Schema, inputs...)
 	if err != nil {
 		return b, bundle{}, err
 	}
@@ -264,7 +264,7 @@ func verifyCandidate(dir string) (bundle, bundle, error) {
 	if r.Baseline != before.fingerprint() || r.Candidate != R.Hash(b.mrs) || r.Revision != m.Revision || r.Before != len(old) || r.After != len(entries) || r.Added != len(added) || r.Removed != len(removed) {
 		return b, before, fmt.Errorf("candidate report mismatch")
 	}
-	for name, expected := range map[string][]byte{"added.txt": R.Text(added), "removed.txt": R.Text(removed)} {
+	for name, expected := range map[string][]byte{"added.txt": R.Text(added), "removed.txt": R.Text(removed), "recovery.json": jsonBytes(recovery), "recovery-policy.json": R.RecoveryPolicy} {
 		data, e := os.ReadFile(filepath.Join(dir, name))
 		if e != nil {
 			return b, before, e
@@ -448,6 +448,9 @@ func run(args []string) error {
 		m, entries, err := b.verify()
 		if err != nil {
 			return err
+		}
+		if m.Schema == R.Schema && m.PolicySHA256 != R.Hash(R.RecoveryPolicy) {
+			return fmt.Errorf("bundle recovery policy is stale; prepare a new candidate")
 		}
 		fmt.Printf("Bundle verified: %d rules, %s\n", len(entries), m.MRSSHA256)
 		return nil

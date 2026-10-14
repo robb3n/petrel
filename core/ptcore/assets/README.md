@@ -1,8 +1,16 @@
 # 国内域名快照
 
-`cn-domains.mrs` 随 App 发布，来源是 [MetaCubeX/meta-rules-dat](https://github.com/MetaCubeX/meta-rules-dat) 的 `cn.list` 与 `geolocation-cn.list`。GPL-3.0，许可证见 `LICENSE.meta-rules-dat`。版本、上游固定提交、原始文件 SHA-256、过滤条目、编译器版本与最终 MRS 哈希以 `cn-domains.sources.json` 为唯一清单，不再手抄到 Go 常量与说明文档。
+`cn-domains.mrs` 随 App 发布，来源是 [MetaCubeX/meta-rules-dat](https://github.com/MetaCubeX/meta-rules-dat) 的地理表 `cn.list` / `geolocation-cn.list`，以及用于恢复具体服务域名的 12 组厂商表/海外表和 `geolocation-!cn.list`（共 27 份固定版本来源；具体文件由 `cnrules.SourceNames` 定义）。GPL-3.0，许可证见 `LICENSE.meta-rules-dat`。版本、上游固定提交、原始文件 SHA-256、过滤条目、编译器版本与最终 MRS 哈希以 `cn-domains.sources.json` 为唯一清单，不再手抄到 Go 常量与说明文档。
 
-策略是并集、去重、排序，过滤所有单 label 模式（包括 `+.cn`、`*.cn`、`.cn` 等整个顶级域的匹配），拒绝未知规则语法与格式错误，再用仓库 `go.mod` 锁定的 mihomo 编译器生成 MRS。保留精确域名及合法前缀 `+.`、`*.`、`.`；不允许任意正则或规则指令。分类表不保证每个域名永远属于国内，新增规则需要审查，条数正常不等于安全。
+策略是并集、去重、排序，过滤所有单 label 模式（包括 `+.cn`、`*.cn`、`.cn` 等整个顶级域的匹配），拒绝未知规则语法与格式错误，再用仓库 `go.mod` 锁定的 mihomo 编译器生成 MRS。保留精确域名及合法前缀 `+.`、`*.`、`.`；不允许任意正则或规则指令。schema 3 从同提交的腾讯、B 站、网易、字节、阿里、京东、小米、华为、小红书、新浪、OPPO 与 vivo 分类中恢复位于被删除 TLD 下的明确域名，同时满足：
+
+- 必须逐条出现在 `core/internal/cnrules/recovery-policy.json` 的 approved 清单中；上游新增成员默认进入 deferred 报告，不因公司归属或 `.cn` 后缀自动获得直连。
+- 与任意厂商海外表或全局海外表有覆盖重叠时，拒绝整个新增候选，包括父域覆盖海外子域。海外表的 TLD 规则保留为拒绝边界；厂商分类的 TLD 只记录为忽略，不恢复。
+- 补充分类只解释精确与 `+.` 后缀模式，其他模式要求重新审查。保留原地理集合，这些门槛只约束新增，不宣称净化了原集合全部误分类。
+
+approved 是维护者/Agent 按固定来源和业务用途审查的恢复范围，deferred 保存未新增独立规则的理由。本轮未单独恢复广告/遥测子项，但被已批准父域覆盖的广告子域仍可能直连；**这不是广告拦截规则**，已有显式拒绝/代理规则仍优先。共享云与国际业务如 `myhuaweicloud.cn`、Lark、BytePlus 等保留待审，不能以厂商在中国就判定每个租户/区域都该直连。
+
+分类表不保证每个域名永远属于国内，新增规则需要审查，条数正常不等于安全。
 
 ## 更新契约
 
@@ -15,7 +23,7 @@
 scripts/cn-rules.sh prepare --dir /tmp/petrel-cn-candidate --ref meta
 scripts/cn-rules.sh verify --dir /tmp/petrel-cn-candidate
 
-# 检查 report.json、added.txt、removed.txt；SHA 必须取自已审查候选。
+# 检查 report.json、added.txt、removed.txt、recovery.json、recovery-policy.json；SHA 必须取自已审查候选。
 scripts/cn-rules.sh apply --dir /tmp/petrel-cn-candidate --sha256 <候选的完整MRS哈希>
 scripts/cn-rules.sh verify
 
@@ -25,16 +33,26 @@ scripts/cn-rules.sh rollback --dir /tmp/petrel-cn-candidate/previous --sha256 <�
 
 相对 `--dir` 路径基于 `core/`，建议使用绝对路径。候选可放仓库的 `.anvil/scratchpad/`，不要把候选原始数据、临时备份或工具锁提交；仓库仅保留最终 MRS 和来源清单。
 
-`prepare` 先解析 `meta` 到同一个完整 commit SHA，再下载该提交的两份来源。候选保存原始输入、基线、完整增删清单和报告。`verify --dir` 不联网：逐一校验哈希、重新过滤与编译，确认二进制、过滤列表、基线和差异都一致。`apply` 要求审查过的完整 MRS 哈希，重新验证候选，若仓库基线已变化则拒绝覆盖，并在写入前保存 `previous/` 与事务记录。SHA 是审查对象绑定与完整性检查，不是上游可信性的证明。
+`prepare` 先解析 `meta` 到同一个完整 commit SHA，再下载该提交的全部来源。候选保存原始输入、基线、完整增删清单、恢复/海外重叠排除报告。`verify --dir` 不联网：逐一校验哈希、重新过滤与编译，确认二进制、过滤列表、恢复/排除/待审报告、审核策略副本与哈希、基线和差异都一致。`apply` 要求审查过的完整 MRS 哈希，重新验证候选，若仓库基线已变化则拒绝覆盖，并在写入前保存 `previous/` 与事务记录。SHA 是审查对象绑定与完整性检查，不是上游可信性的证明。
 
 ## 校验与恢复
 
 - 核对新增规则是否会把应代理的域名交给国内 DNS，删除规则是否会让国内常用站点绕代理。大幅变化需要逐类解释；工具不靠一个比例阈值自动批准。
-- 检查使用 mihomo 的实际域名匹配：百度、B 站、淘宝、京东应命中国内规则；Google、YouTube、未知 `.cn` / `.com` 不应命中。单测覆盖坏格式、全 TLD、篡改、下载失败、基线冲突、回退及中途写入状态。
-- Gradle 在 AAR 缓存命中时也运行离线校验；MRS 与 JSON 都是 AAR 构建输入。直接运行 `core/build.sh` 也校验。运行时资源路径由内嵌 MRS 哈希推导，不再手动修改文件名或测试中的固定哈希。
+- 检查使用 mihomo 的实际域名匹配：百度、B 站、淘宝、京东应命中国内规则；腾讯图片/头像家族 `qpic.cn`、`qlogo.cn`、`gtimg.cn` 应命中；Google、YouTube、未知 `.cn` / `.com`、域名伪后缀与海外腾讯云区域样本不应命中。单测覆盖坏格式、全 TLD、篡改、下载失败、基线冲突、回退及中途写入状态。
+- Gradle 在 AAR 缓存命中时也运行离线校验；MRS、来源 JSON 与 recovery-policy.json 都是 AAR 构建输入。直接运行 `core/build.sh` 也校验。运行时资源路径由内嵌 MRS 哈希推导，不再手动修改文件名或测试中的固定哈希。
 - 应用两个文件不是一次文件系统事务：普通错误恢复旧 MRS；进程中断时，保留的 `previous/` 可恢复已知的新旧组合，构建校验会拒绝哈希不一致的组合。工具用 `assets/.cn-rules.lock` 防并发。若进程被杀留下锁，先确认更新进程已退出，再移除该空目录并执行回退；不凭目录存在就杀进程。
 - 同一个候选可以再 `apply` 一次（上一次替换资源时失败，或 `apply` 之后回退过）：`previous/` 里的事务记录与这一次的新旧指纹一致就沿用，不重写。记录对不上、缺失或读不了时拒绝，并报出留下它的那次事务：那次更新还装着就先用这个目录回退，否则重新 `prepare` 一个候选。已有的回退记录不会被覆盖。
 - 回退仅接受事务记录中的已知文件哈希，遇到他人改动拒绝覆盖。已经部署到手机的版本需要重新构建、部署，仓库回退不会静默热改运行中的设备。
 - 数据变化时，完成 Go 检查、构建与设备上的国内 DNS／路由、国外 DoH 联合验证后再交付；仅来源元数据变化而 MRS 字节不变，不宣称获得了新的规则覆盖。
 
 2026-10-09 首轮工具验证：固定上游提交 `32bbb6c45c63a491c571f98cd9d863d7fd6771dc`，候选与旧 MRS 字节相同；112534 条、过滤 52 条，全量差异新增 0／删除 0。本次只补齐固定提交元数据和维护流程，未改变分流集合。
+
+## 与桌面 mihomo 保持一致
+
+Petrel 仓库是这两端国内域名集合的唯一生成源；移除手机专用的两个微信精确端点补丁，使用共用 MRS。一次审查生成一个产物，手机随 APK 内嵌，桌面使用该产物的原字节及来源 JSON，不各自下载或手写补丁。设备的 DNS 出口选择仍由各自配置负责；桌面可固定日本，手机可跟随主代理。
+
+同步由维护 Agent 执行：先 `scripts/cn-rules.sh verify`；备份目标规则与来源清单，复制已验证文件；用目标 mihomo 解码 MRS 生成审查文本并确认可读；更新目标文件 provider、清真实 DNS 缓存，核对加载条数与文件 SHA-256。任一步失败恢复原规则并重载。不要输出控制器 secret，不重写含节点凭据的配置，不清 fake-IP。手机升级须确认原 YAML 未变、VPN 已恢复、内嵌资源与桌面哈希相同；仅安装 APK 不算部署完成。
+
+2026-10-14 固定原上游提交重建：新增 91、删除 0，恢复 `qpic.cn` / `qlogo.cn` / `gtimg.cn` 等明确腾讯服务；28 条与海外分类重叠的候选被排除。恢复与排除明细由 `prepare` 生成的 `recovery.json` 重现。旧 schema 0/1 资源仍可作为基线或回退；旧候选须重新 prepare 后才能 apply。
+
+2026-10-14 第二轮扩展：固定相同上游提交，schema 3 在腾讯版基础上新增 168、删除 0；合计 112793 条。27 份来源固定版本，259 条恢复批准项（含原腾讯 91 条）、228 条未新增独立规则的待审项与原因均可追溯。构建检查恢复策略 SHA，改策略必须重新 prepare/apply，避免旧 MRS 与新审核策略脱节。schema 0/1/2 资源继续支持基线与回退；旧候选需重建。

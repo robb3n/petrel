@@ -20,23 +20,43 @@ import (
 
 const MRSFile = "cn-domains.mrs"
 const ManifestFile = "cn-domains.sources.json"
-const Transform = "union-sort-domain-v1; remove all single-label patterns; reject unsupported syntax"
+const LegacyTransform = "union-sort-domain-v1; remove all single-label patterns; reject unsupported syntax"
+const TencentTransform = "union-sort-domain-v2; recover explicit Tencent members under removed TLDs; exclude overseas overlaps; reject unsupported syntax"
+const Transform = "union-sort-domain-v3; recover reviewed service members under removed TLDs; exclude overseas overlaps; reject unsupported syntax"
+const Schema = 3
+
+// Versioned sources are shared by the downloader and offline verifier. Legacy
+// bundles remain readable for baseline comparison and guarded rollback.
+func SourceNames(schema int) []string {
+	if schema == 3 {
+		names := []string{"cn.list", "geolocation-cn.list"}
+		for _, vendor := range []string{"tencent", "bilibili", "netease", "bytedance", "alibaba", "jd", "xiaomi", "huawei", "xiaohongshu", "sina", "oppo", "vivo"} {
+			names = append(names, vendor+".list", vendor+"@!cn.list")
+		}
+		return append(names, "geolocation-!cn.list")
+	}
+	if schema == 2 {
+		return []string{"cn.list", "geolocation-cn.list", "tencent.list", "tencent@!cn.list"}
+	}
+	return []string{"cn.list", "geolocation-cn.list"}
+}
 
 type Source struct {
 	URL    string `json:"url"`
 	SHA256 string `json:"sha256"`
 }
 type Manifest struct {
-	Schema     int      `json:"schema,omitempty"`
-	Created    string   `json:"created"`
-	Revision   string   `json:"revision,omitempty"`
-	Sources    []Source `json:"sources"`
-	Transform  string   `json:"transform"`
-	Updates    string   `json:"updates"`
-	MRSSHA256  string   `json:"mrs_sha256"`
-	Entries    int      `json:"entries,omitempty"`
-	RemovedTLD []string `json:"removed_tld,omitempty"`
-	Compiler   string   `json:"compiler,omitempty"`
+	Schema       int      `json:"schema,omitempty"`
+	Created      string   `json:"created"`
+	Revision     string   `json:"revision,omitempty"`
+	Sources      []Source `json:"sources"`
+	Transform    string   `json:"transform"`
+	Updates      string   `json:"updates"`
+	MRSSHA256    string   `json:"mrs_sha256"`
+	Entries      int      `json:"entries,omitempty"`
+	RemovedTLD   []string `json:"removed_tld,omitempty"`
+	PolicySHA256 string   `json:"recovery_policy_sha256,omitempty"`
+	Compiler     string   `json:"compiler,omitempty"`
 }
 
 func Hash(b []byte) string { return fmt.Sprintf("%x", sha256.Sum256(b)) }
@@ -123,23 +143,36 @@ func Verify(mrs, manifest []byte) (Manifest, []string, error) {
 	if err := json.Unmarshal(manifest, &m); err != nil {
 		return m, nil, err
 	}
-	if m.Schema != 0 && m.Schema != 1 {
+	if m.Schema != 0 && m.Schema != 1 && m.Schema != 2 && m.Schema != Schema {
 		return m, nil, fmt.Errorf("unknown manifest schema")
 	}
-	if m.Schema == 1 {
+	if m.Schema >= 1 {
+		transform := LegacyTransform
+		if m.Schema == 2 {
+			transform = TencentTransform
+		}
+		if m.Schema == Schema {
+			transform = Transform
+		}
 		rev, e := hex.DecodeString(m.Revision)
-		if e != nil || len(rev) != 20 || m.Entries <= 0 || m.Transform != Transform || m.Compiler == "" || len(m.Sources) != 2 {
+		if e != nil || len(rev) != 20 || m.Entries <= 0 || m.Transform != transform || m.Compiler == "" || len(m.Sources) != len(SourceNames(m.Schema)) {
 			return m, nil, fmt.Errorf("incomplete pinned provenance")
 		}
 		if _, e = time.Parse(time.RFC3339, m.Created); e != nil {
 			return m, nil, fmt.Errorf("invalid source commit date")
 		}
-		for i, name := range []string{"cn.list", "geolocation-cn.list"} {
+		for i, name := range SourceNames(m.Schema) {
 			src := m.Sources[i]
 			digest, e := hex.DecodeString(src.SHA256)
 			if e != nil || len(digest) != 32 || src.URL != "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/"+m.Revision+"/geo/geosite/"+name {
 				return m, nil, fmt.Errorf("invalid pinned source metadata")
 			}
+		}
+	}
+	if m.Schema == Schema {
+		digest, err := hex.DecodeString(m.PolicySHA256)
+		if err != nil || len(digest) != 32 {
+			return m, nil, fmt.Errorf("invalid recovery policy hash")
 		}
 	}
 	if Hash(mrs) != m.MRSSHA256 {
@@ -166,10 +199,27 @@ func Verify(mrs, manifest []byte) (Manifest, []string, error) {
 		strategy.Insert(entry)
 	}
 	strategy.FinishInsert()
-	for host, want := range map[string]bool{
+	sentinels := map[string]bool{
 		"www.baidu.com": true, "www.bilibili.com": true, "www.taobao.com": true, "www.jd.com": true,
 		"www.google.com": false, "www.youtube.com": false, "unclassified-example.cn": false, "unclassified-example.com": false,
-	} {
+	}
+	if m.Schema >= 2 {
+		for _, host := range []string{"vfiles.gtimg.cn", "puui.qpic.cn", "vip.image.video.qpic.cn", "mmbiz.qpic.cn", "mmbiz.qlogo.cn", "q1.qlogo.cn", "thirdwx.qlogo.cn", "wx.qlogo.cn"} {
+			sentinels[host] = true
+		}
+		for _, host := range []string{"qpic.cn.example.com", "ap-tokyo.tencentcos.cn", "bucket.ap-tokyo.tencentcos.com.cn", "www.openai.com", "github.com"} {
+			sentinels[host] = false
+		}
+	}
+	if m.Schema == Schema {
+		for _, host := range []string{"www.sina.com.cn", "wx1.sinaimg.cn", "s1.sinajs.cn", "www.iconfont.cn", "img.tbcdn.cn", "img.elemecdn.cn", "www.rsproxy.cn", "img.zijieimg.cn", "cdn.bilivideo.cn", "cdn.mifile.cn", "www.oneplus.cn", "www.nearme.com.cn", "www.huawei.cn", "www.vivo.cn"} {
+			sentinels[host] = true
+		}
+		for _, host := range []string{"www.tiktok.com", "www.lark.cn", "foo.myhuaweicloud.cn", "foo.byteplusapi.com.cn", "www.sina.com.cn.example.com"} {
+			sentinels[host] = false
+		}
+	}
+	for host, want := range sentinels {
 		if strategy.Match(&C.Metadata{Host: host}, C.RuleMatchHelper{}) != want {
 			return m, nil, fmt.Errorf("routing sentinel failed: %s", host)
 		}

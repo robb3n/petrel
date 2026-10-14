@@ -46,9 +46,21 @@ func downloadFixture(t *testing.T) func(string) ([]byte, error) {
 			return []byte(`{"sha":"` + testRevision + `","commit":{"committer":{"date":"2026-10-09T00:00:00Z"}}}`), nil
 		case rawRoot + testRevision + "/geo/geosite/cn.list":
 			return testInput, nil
+		case rawRoot + testRevision + "/geo/geosite/tencent.list":
+			return []byte("+.qpic.cn\n+.qlogo.cn\n+.gtimg.cn\n+.tencentcos.cn\n+.wetv.vip\n"), nil
+		case rawRoot + testRevision + "/geo/geosite/tencent@!cn.list":
+			return []byte("+.ap-tokyo.tencentcos.cn\n+.wetv.vip\n"), nil
 		case rawRoot + testRevision + "/geo/geosite/geolocation-cn.list":
 			return []byte("+.new.example.cn\n"), nil
 		default:
+			for _, name := range sourceNames {
+				if u == rawRoot+testRevision+"/geo/geosite/"+name {
+					if strings.Contains(name, "!cn") {
+						return []byte("+.foreign.example\n"), nil
+					}
+					return R.Text([]string{"+.sina.com.cn", "+.sinaimg.cn", "+.sinajs.cn", "+.iconfont.cn", "+.tbcdn.cn", "+.elemecdn.cn", "+.rsproxy.cn", "+.zijieimg.cn", "+.bilivideo.cn", "+.mifile.cn", "+.oneplus.cn", "+.nearme.com.cn", "+.huawei.cn", "+.vivo.cn"}), nil
+				}
+			}
 			t.Fatalf("request not pinned to a single revision: %s", u)
 			return nil, nil
 		}
@@ -324,5 +336,18 @@ func TestApplyRefusesForeignRollbackRecord(t *testing.T) {
 				t.Error("assets replaced despite the refusal")
 			}
 		})
+	}
+}
+
+func TestRecoveryReviewCannotBeTampered(t *testing.T) {
+	assets, dir, _ := fixture(t)
+	if err := prepareWithFetch(assets, dir, "meta", downloadFixture(t)); err != nil {
+		t.Fatal(err)
+	}
+	if err := write(dir, "recovery.json", []byte("{}\n")); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := verifyCandidate(dir); err == nil {
+		t.Fatal("tampered recovery report accepted")
 	}
 }

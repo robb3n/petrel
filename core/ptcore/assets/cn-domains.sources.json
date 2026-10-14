@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 3,
   "created": "2026-10-08T02:12:40Z",
   "revision": "32bbb6c45c63a491c571f98cd9d863d7fd6771dc",
   "sources": [
@@ -10,12 +10,112 @@
     {
       "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/geolocation-cn.list",
       "sha256": "038a249dd3d8cf8d81fb9de0b4fc933e3bcdca4b3b8e96860358020626a5073d"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/tencent.list",
+      "sha256": "47ee7466129e21151dff7bde45aba182290d854f0febe22e22096311bb99e571"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/tencent@!cn.list",
+      "sha256": "151e6d9a2d4deb5b7740b060cc51d17122050b5d457ab160dfaabdc211b9cd11"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/bilibili.list",
+      "sha256": "d1d76d33c08b2bfaea6b1f661c87eeb2064f6ebd7c5dbe8e1f2bb8ab5b4acc98"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/bilibili@!cn.list",
+      "sha256": "4dd3337586d84f3abdaa5ec5f1c3b7c8414976f5a71086219f635b1e620446e2"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/netease.list",
+      "sha256": "0eedbc347c56f9acec10a64831ab3174f853d85c6f9dfa21552f4e3f3b173ec4"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/netease@!cn.list",
+      "sha256": "4260399ba55fcd807ba65488e78f680b00dbe51bbaec33e6173f9ca52a7526a6"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/bytedance.list",
+      "sha256": "6bc95b58cd26fa2f7c13e0cc2fa71a9b1ab0cb4fc064e28a9e356398e0e1a0bd"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/bytedance@!cn.list",
+      "sha256": "301798f2e35c195ca0366b0c645ddc97d5b52da1036a231fc9be160d51b1c055"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/alibaba.list",
+      "sha256": "943ba279cfed187f5a84797e5852b55429eee278fa3b32a36c47f78de0e4299c"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/alibaba@!cn.list",
+      "sha256": "ba465724b30fc84f1807cadad73f447ea15600f7998b84401aa818d943d952d4"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/jd.list",
+      "sha256": "ab65b8b09eaf1739231a070a184b5442614a8c6ff9c051e8be5f63942f0e1aba"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/jd@!cn.list",
+      "sha256": "cf190109f905da2deb542745fb7e071678eb821d34913223dc1928dd210c3bf9"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/xiaomi.list",
+      "sha256": "ad88eff75a942bb8719c07dc02d59931eb8080666c920e62fe7a49cfb0652e35"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/xiaomi@!cn.list",
+      "sha256": "f2323a39b43d30a661f61ded5f452f2106f6936443a3c007ac7daf17be3938ba"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/huawei.list",
+      "sha256": "db2bc2f2adc13c0f203a4f6abb41886036ccf6d1bf27d68f1ea43c8e22564133"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/huawei@!cn.list",
+      "sha256": "5d23bfa56474f2e2dc9619aa140c742d18a42c8c784072d49fce239565dc0e89"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/xiaohongshu.list",
+      "sha256": "b15cda1ed539059cdafb6ad3ffad558c7d3122c3be4169395c3915155616d2b0"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/xiaohongshu@!cn.list",
+      "sha256": "e9ef04abc20b0bc324ac0251094fa78e38c0bbd2c7bf310b212baab3a02c7737"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/sina.list",
+      "sha256": "a9f48310892807e0a997843a48b0d5f8a1a8816c9401ab660f84c4b711d3438a"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/sina@!cn.list",
+      "sha256": "209eb3c4a45b888695a0222923b8d9a314017a432b750b095498bcb0b82d5a35"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/oppo.list",
+      "sha256": "d579550b0ddb77136dd2e23c0f787a6646d021976cb00fe8f79a2d8aebfc4e04"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/oppo@!cn.list",
+      "sha256": "0ea311f4afd2575b6a6a5829f2a6b2b9be06e1b61d741a2a2819f48f327ac2d3"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/vivo.list",
+      "sha256": "dd2b6076bf131870d2119dcb9e74ae0aa6afae61b442a088425a4f68f647f081"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/vivo@!cn.list",
+      "sha256": "344412d47713aeb790bddd6a68c94e03b10322c7c6566dbced49f021f81c87af"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/geolocation-!cn.list",
+      "sha256": "d525d271b4c2602549ee9713234108923b8f61e3c3d957bdd0c28453e3904cf3"
     }
   ],
-  "transform": "union-sort-domain-v1; remove all single-label patterns; reject unsupported syntax",
+  "transform": "union-sort-domain-v3; recover reviewed service members under removed TLDs; exclude overseas overlaps; reject unsupported syntax",
   "updates": "Pinned audited bundle; prepare, inspect diff, apply exact hash; never refresh on device.",
-  "mrs_sha256": "da4356fda44c7d069d7b86c069241bef5e9a154a1f9c98bc40e57a47c98ea9a8",
-  "entries": 112534,
+  "mrs_sha256": "e3843b4dbb1f2828f09ba83b2525291b1c2d6c3c5a04166e666cd09ea46c1bdd",
+  "entries": 112793,
   "removed_tld": [
     "+.alibaba",
     "+.alipay",
@@ -70,5 +170,6 @@
     "+.xn--zfr164b",
     "+.yun"
   ],
+  "recovery_policy_sha256": "79b9e3a0be81245197548ac45a196ef2be8ef46531b4aff7034d7c66a3fa4c60",
   "compiler": "github.com/metacubex/mihomo@v1.19.32"
 }
