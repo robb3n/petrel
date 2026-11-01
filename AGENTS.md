@@ -104,7 +104,7 @@ Android 常驻代理 App：把 mihomo 内核和一个内置 tailnet 节点（tsn
 - 语义化，tag 带 `v` 前缀 `v0.1.0`。`app/build.gradle.kts` 保留一行字面量 `val baseVersionName`。
 - **`versionCode` = git 提交计数 + 12**（`git rev-list --count HEAD` 加上开源前压掉的 12 个提交，见 `squashedCommits`；自动算，永远不手动改；同一提交重建得到同一个 build 号）。
 - **`versionName` 自动推出**：HEAD 上有 tag `v<baseVersionName>` 且已跟踪文件没有未提交改动 → `<baseVersionName>`（稳定版）；否则 `<baseVersionName>-dev.<build>`（如 `0.1.0-dev.12`，未跟踪文件不算改动）。
-- 升版本只改 `baseVersionName` 那一行，并在那个提交上打 tag `v<baseVersionName>`。
+- 升版本只由 /release 在人点名版本时做：只改 baseVersionName 那一行，并在那个提交上打 tag v<baseVersionName>。
 - 没有 git 历史时（GitHub 自动生成的源码压缩包）照样能构建：`versionName` 退成 `<baseVersionName>-src`、`versionCode` 为 1。这种包只供自行构建，不进侧载存档、不发布。
 
 ## Local Deploy
@@ -119,7 +119,9 @@ Android 常驻代理 App：把 mihomo 内核和一个内置 tailnet 节点（tsn
 
 ## Release
 
-opt-in `/release`，只由人发起。发布的是回火任务的 stamp 打过 tag `v<baseVersionName>` 的提交；渠道是本仓库的 GitHub Releases，附 APK 与它的 sha256。
+opt-in `/release <版本>`，只由人发起。发布的是切版本打了 tag `v<baseVersionName>` 的提交；渠道是本仓库的 GitHub Releases，附 APK 与它的 sha256。
+
+切版本：改 `app/build.gradle.kts` 的 `baseVersionName` 那一行；tag 格式 `v<X.Y.Z>`。
 
 1. 前置：HEAD 就是那个 tag，已跟踪文件干净，分支与 tag 都已推到 origin（脚本第 1 步会逐条核对）。
 2. 起草更新说明：取上一个 `v*` tag 以来的提交（首次发布取全部），以 `feat` / `fix` 为主，写成面向用户的中文，不写内部重构与构建细节，存成会话 scratchpad 里的临时文件。

@@ -49,7 +49,7 @@ base="$(sed -n 's/^val baseVersionName = "\(.*\)"$/\1/p' app/build.gradle.kts)"
 [ -n "$base" ] || fail "读不出 app/build.gradle.kts 的 baseVersionName"
 tag="v$base"
 git diff --quiet HEAD || fail "已跟踪文件有未提交改动"
-git tag --points-at HEAD | grep -qx "$tag" || fail "HEAD 上没有 tag ${tag}（tag 由回火任务的 stamp 打）"
+git tag --points-at HEAD | grep -qx "$tag" || fail "HEAD 上没有 tag ${tag}（用 /release <版本> 切版本）"
 git fetch -q origin || fail "git fetch 失败"
 [ "$(git rev-parse HEAD)" = "$(git rev-parse '@{upstream}' 2>/dev/null)" ] || fail "HEAD 与上游分支不一致，先 push"
 # annotated tag 的 ls-remote 结果是 tag 对象；有剥开的 ^{} 行就用它指向的提交
